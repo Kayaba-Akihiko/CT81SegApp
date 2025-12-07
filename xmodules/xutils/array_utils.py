@@ -1,0 +1,1191 @@
+#  Copyright (c) 2025. by Yi GU <gu.yi.gu4@naist.ac.jp>,
+#  Biomedical Imaging Intelligence Laboratory,
+#  Nara Institute of Science and Technology.
+#  All rights reserved.
+#  This file can not be copied and/or distributed
+#  without the express permission of Yi GU.
+
+import re
+from typing import Union, Optional, TypeAlias, Literal, TypeVar, Sequence, Dict, Tuple, Type, List
+import copy as pycopy
+import functools
+
+import numpy as np
+import numpy.typing as npt
+
+from .lib_utils import import_available
+
+torch = None
+F = None
+TORCH_CUDA_AVAILABLE = None
+if HAS_TORCH := import_available('torch'):
+    import torch
+    import torch.nn.functional as F
+    TORCH_CUDA_AVAILABLE = torch.cuda.is_available()
+
+cp = None
+cpt = None
+CUPY_CUDA_AVAILABLE = None
+if HAS_CUPY := import_available('cupy'):
+    import cupy as cp
+    import cupy.typing as cpt
+    CUPY_CUDA_AVAILABLE = import_available('cupy.cuda.is_available') and cp.cuda.is_available()
+
+NPGeneric: TypeAlias = Union[np.generic, Type[np.generic]]
+NPFloating: TypeAlias = Union[np.floating, Type[np.floating]]
+NPInteger: TypeAlias = Union[np.integer, Type[np.integer]]
+NPIntOrFloat: TypeAlias = Union[NPInteger, NPFloating]
+_NPDType = TypeVar('_NPDType', bound=NPGeneric)
+TypeArrayLike: TypeAlias = Union[
+    npt.NDArray[_NPDType], 'torch.Tensor', 'cpt.NDArray[_NPDType]', Sequence]
+TypeDType: TypeAlias = Union[
+    str, np.dtype, NPGeneric, 'torch.dtype']
+TypeDeviceString: TypeAlias = Literal['cpu', 'cuda']
+TypeDevice: TypeAlias = Union[TypeDeviceString, 'torch.device']
+TypeArrayBackend: TypeAlias = Literal['numpy', 'cupy', 'torch']
+TypePadWidth: TypeAlias = Union[
+    int, Sequence[int], Sequence[Sequence[int]], TypeArrayLike[NPInteger]]
+
+STRING_TO_NUMPY_DTYPE_MAP: Dict[str, Union[NPGeneric, np.dtype]] = {
+    'float32': np.float32,
+    'float64': np.float64,
+    'uint8': np.uint8,
+    'uint16': np.uint16,
+    'uint32': np.uint32,
+    'uint64': np.uint64,
+    'int8': np.int8,
+    'int16': np.int16,
+    'int32': np.int32,
+    'int64': np.int64,
+    'bool': np.bool_,
+}
+
+NUMPY_DTYPE_TO_STRING_MAP = {
+    v: k for k, v in STRING_TO_NUMPY_DTYPE_MAP.items()
+}
+
+TORCH_TO_NUMPY_DTYPE_MAP = None
+NUMPY_TO_TORCH_DTYPE_MAP = None
+TORCH_BLOCKING_DEVICES = None
+torch_no_grad = None
+if HAS_TORCH:
+    TORCH_TO_NUMPY_DTYPE_MAP: Union[
+        Dict[torch.dtype, Union[NPGeneric, np.dtype]],
+        None,
+    ] = {
+        torch.float32: np.float32,
+        torch.float64: np.float64,
+        torch.uint8: np.uint8,
+        torch.uint16: np.uint16,
+        torch.uint32: np.uint32,
+        torch.uint64: np.uint64,
+        torch.int8: np.int8,
+        torch.int16: np.int16,
+        torch.int32: np.int32,
+        torch.int64: np.int64,
+        torch.bool: np.bool_,
+    }
+    NUMPY_TO_TORCH_DTYPE_MAP = {
+        v: k for k, v in TORCH_TO_NUMPY_DTYPE_MAP.items()
+    }
+
+    STRING_TO_TORCH_DTYPE_MAP = {
+        k: NUMPY_TO_TORCH_DTYPE_MAP[v] for k, v in STRING_TO_NUMPY_DTYPE_MAP.items()
+    }
+
+    TORCH_DTYPE_TO_STRING_MAP = {
+        v: k for k, v in STRING_TO_TORCH_DTYPE_MAP.items()
+    }
+
+    TORCH_BLOCKING_DEVICES = {'cpu', 'mps'}
+
+    torch_no_grad = torch.no_grad
+else:
+    # --- Define a fallback that works both as decorator and context manager ---
+    class _DummyNoGrad:
+        """A dummy replacement for torch.no_grad that supports both
+        decorator and context manager syntax.
+        """
+
+        def __call__(self, func=None):
+            # Used as a decorator
+            if func is None:
+                return lambda f: f
+            return func
+
+        def __enter__(self):
+            # Used as a context manager
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            # No-op for context exit
+            return False
+    torch_no_grad = _DummyNoGrad()
+
+
+class ArrayUtils:
+
+    @staticmethod
+    def is_array(array: TypeArrayLike) -> bool:
+        if isinstance(array, np.ndarray):
+            return True
+        elif HAS_CUPY and isinstance(array, cp.ndarray):
+            return True
+        elif HAS_TORCH and isinstance(array, torch.Tensor):
+            return True
+        return False
+
+    @staticmethod
+    @functools.lru_cache()
+    def is_cuda_available() -> bool:
+        if HAS_CUPY and CUPY_CUDA_AVAILABLE:
+            return True
+        elif HAS_TORCH and TORCH_CUDA_AVAILABLE:
+            return True
+        return False
+
+    @staticmethod
+    def get_backend_n_device(
+            x: TypeArrayLike
+    ) -> Tuple[TypeArrayBackend, TypeDevice]:
+        if isinstance(x, np.ndarray):
+            return 'numpy', 'cpu'
+        elif HAS_CUPY and isinstance(x, cp.ndarray):
+            return 'cupy', 'cuda'
+        elif HAS_TORCH and isinstance(x, torch.Tensor):
+            return 'torch', x.device
+        else:
+            raise TypeError(
+                f"Unsupported array type: {type(x)}. "
+                "Expected one of: np.ndarray, torch.Tensor, cp.ndarray."
+            )
+
+    @staticmethod
+    def infer_backend_from_device(device: TypeDevice) -> TypeArrayBackend:
+        if isinstance(device, str):
+            if device == 'cpu':
+                return 'numpy'
+            elif device == 'cuda':
+                if HAS_CUPY and CUPY_CUDA_AVAILABLE:
+                    return 'cupy'
+                elif HAS_TORCH and TORCH_CUDA_AVAILABLE:
+                    return 'torch'
+                else:
+                    raise ValueError(
+                        f"Unsupported device: {device}. "
+                        "Expected one of: 'cpu', 'cuda'."
+                    )
+            else:
+                raise ValueError(
+                    f'Unsupported device: {device}. Expected one of: "cpu", "cuda".'
+                )
+        elif HAS_TORCH and isinstance(device, torch.device):
+            return 'torch'
+        else:
+            raise TypeError(
+                f"Unsupported device type: {type(device)}. "
+                "Expected str or torch.device."
+            )
+
+    @staticmethod
+    def _convert_dtype(
+            dtype: TypeDType,
+            to: Literal['numpy', 'torch', 'string']
+    ) -> Union[np.generic, 'torch.dtype', str]:
+        if isinstance(dtype, str):
+            if to == 'numpy':
+                conv_map = STRING_TO_NUMPY_DTYPE_MAP
+            elif to == 'torch':
+                conv_map = STRING_TO_TORCH_DTYPE_MAP
+            elif to == 'string':
+                conv_map = {dtype: dtype}
+            else:
+                raise ValueError(
+                    f"Unknown conversion target: {to}. "
+                    f"Expected 'numpy', 'torch', or 'string'."
+                )
+        elif (
+                isinstance(dtype, np.dtype)
+                or (
+                        isinstance(dtype, type)
+                        and issubclass(dtype, np.generic)
+                )
+        ):
+            dtype = np.dtype(dtype)  # Ensure it's a numpy dtype
+            if to == 'numpy':
+                conv_map = {dtype: dtype}
+            elif to == 'torch':
+                conv_map = NUMPY_TO_TORCH_DTYPE_MAP
+            elif to == 'string':
+                conv_map = NUMPY_DTYPE_TO_STRING_MAP
+            else:
+                raise ValueError(
+                    f"Unknown conversion target: {to}. "
+                    f"Expected 'numpy', 'torch', or 'string'."
+                )
+        elif HAS_TORCH and isinstance(dtype, torch.dtype):
+            if to == 'numpy':
+                conv_map = TORCH_TO_NUMPY_DTYPE_MAP
+            elif to == 'torch':
+                conv_map = {dtype: dtype}
+            elif to == 'string':
+                conv_map = TORCH_DTYPE_TO_STRING_MAP
+            else:
+                raise ValueError(
+                    f"Unknown conversion target: {to}. "
+                    f"Expected 'numpy', 'torch', or 'string'."
+                )
+        else:
+            raise TypeError(
+                f"Unsupported dtype type: {type(dtype)}. "
+                "Expected str, np.dtype, or torch.dtype."
+            )
+        return conv_map[dtype]
+
+    @classmethod
+    def convert_dtype_to_string(
+            cls, dtype: TypeDType,
+    ) -> str:
+        return cls._convert_dtype(dtype, to='string')
+
+    @classmethod
+    def convert_dtype_to_numpy(
+            cls, dtype: TypeDType,
+    ) -> Union[np.generic, np.dtype]:
+        return cls._convert_dtype(dtype, to='numpy')
+
+    @classmethod
+    def convert_dtype_to_torch(
+            cls, dtype: TypeDType,
+    ) -> 'torch.dtype':
+        return cls._convert_dtype(dtype, to='torch')
+
+    @staticmethod
+    def _convert_device(
+            device: TypeDevice,
+            to: Literal['string', 'torch'],
+    ) -> Union[Literal['cpu'], Literal['cpu', 'cuda'], 'torch.device']:
+        if isinstance(device, str):
+            if device not in {'cpu', 'cuda'}:
+                raise ValueError(
+                    f"Unsupported device: {device}. "
+                    "Expected 'cpu' or 'cuda'."
+                )
+            if to == 'string':
+                return device
+            elif to == 'torch':
+                return torch.device(device)
+            else:
+                raise ValueError(
+                    f"Unknown conversion target: {to}. "
+                    f"Expected 'string' or 'torch'."
+                )
+        elif HAS_TORCH and isinstance(device, torch.device):
+            if to == 'string':
+                assert device.type in {'cpu', 'cuda'}, (
+                    f"Unsupported torch.device type: {device.type}. "
+                    "Expected 'cpu' or 'cuda'."
+                )
+                return device.type
+            elif to == 'torch':
+                return device
+            else:
+                raise ValueError(
+                    f"Unknown conversion target: {to}. "
+                    f"Expected 'string' or 'torch'."
+                )
+        else:
+            raise TypeError(
+                f"Unsupported device type: {type(device)}. "
+                "Expected str or torch.device."
+            )
+
+    @classmethod
+    def convert_device_to_string(
+            cls, device: TypeDevice,
+    ) -> Union[TypeDeviceString, TypeDevice]:
+        return cls._convert_device(device, to='string')
+
+    @classmethod
+    def convert_device_to_torch(
+            cls, device: TypeDevice,
+    ) -> Union['torch.device', TypeDevice]:
+        return cls._convert_device(device, to='torch')
+
+    @classmethod
+    def to_numpy(
+            cls,
+            array: TypeArrayLike,
+            dtype: Optional[TypeDType] = None,
+            device: Optional[TypeDevice] = None,
+    ):
+        if dtype is not None:
+            dtype = cls.convert_dtype_to_numpy(dtype)
+        if device is not None:
+            device = cls.convert_device_to_string(device)
+
+        if device is not None and device != 'cpu':
+            raise ValueError(
+                f"array_to only supports device='cpu', got device='{device}'."
+            )
+        if HAS_TORCH and isinstance(array, torch.Tensor):
+            array = np.asarray(
+                array.detach().cpu().numpy(),
+                dtype=dtype
+            )
+        elif HAS_CUPY and isinstance(array, cp.ndarray):
+            array = cp.asnumpy(array)
+        elif isinstance(array, np.ndarray):
+            if (
+                    dtype is not None
+                    and array.ndim > 0
+                    and array.dtype.itemsize < np.dtype(dtype).itemsize
+            ):
+                array = np.ascontiguousarray(array)
+        else:
+            array = np.asarray(array)
+        if dtype is not None:
+            array = array.astype(dtype, copy=False)
+        return array
+
+    @classmethod
+    def to_list(
+            cls,
+            array: TypeArrayLike,
+            dtype: Optional[TypeDType] = None,
+            device: Optional[TypeDevice] = None,
+    ):
+        if dtype is not None:
+            dtype = cls.convert_dtype_to_string(dtype)
+        if device is not None:
+            device = cls.convert_device_to_string(device)
+
+        if dtype is not None and dtype not in {
+            'float32', 'float64', 'int32', 'int64'}:
+            raise ValueError(
+                f"Unsupported dtype: {dtype}. "
+                "Expected one of: 'float32', 'float64', 'int32', 'int64'."
+            )
+        if device is not None and device != 'cpu':
+            raise ValueError(
+                f"array_to only supports device='cpu', got device='{device}'."
+            )
+        if isinstance(array, np.ndarray):
+            return array.tolist()
+        elif HAS_TORCH and isinstance(array, torch.Tensor):
+            return array.tolist()
+        elif HAS_CUPY and isinstance(array, cp.ndarray):
+            return cp.asnumpy(array).tolist()
+        else:
+            raise TypeError(
+                f"Unsupported array type: {type(array)}. "
+                "Expected one of: np.ndarray, torch.Tensor, cp.ndarray."
+            )
+
+    @classmethod
+    def to_cupy(
+            cls,
+            array: TypeArrayLike,
+            dtype: Optional[TypeDType] = None,
+            device: Optional[TypeDevice] = None,
+    ) -> cpt.NDArray:
+        if dtype is not None:
+            dtype = cls.convert_dtype_to_numpy(dtype)
+        if device is not None:
+            device = cls.convert_device_to_string(device)
+        if device is not None and device != 'cuda':
+            raise ValueError(
+                f"array_to only supports device='cuda', got device='{device}'."
+            )
+        if HAS_TORCH and isinstance(array, torch.Tensor) and array.device.type == 'cuda':
+            # This is needed because of https://github.com/cupy/cupy/issues/7874#issuecomment-1727511030
+            if array.dtype == torch.bool:
+                array = array.detach().to(torch.uint8)
+                if dtype is None:
+                    dtype = bool  # type: ignore
+            array = cp.asarray(array, dtype)
+        else:
+            array = cp.asarray(array, dtype)
+        return array
+
+    @classmethod
+    def to_torch(
+            cls,
+            array: TypeArrayLike,
+            dtype: Optional[TypeDType] = None,
+            device: Optional[TypeDevice] = None,
+    ):
+        if dtype is not None:
+            dtype = cls.convert_dtype_to_torch(dtype)
+        if device is not None:
+            device = cls.convert_device_to_torch(device)
+        if isinstance(array, np.ndarray):
+            # skip array of string classes and object, refer to:
+            # https://github.com/pytorch/pytorch/blob/v1.9.0/torch/utils/data/_utils/collate.py#L13
+            if re.search(r"[SaUO]", array.dtype.str) is None:
+                # numpy array with 0 dims is also sequence iterable,
+                # `ascontiguousarray` will add 1 dim if img has no dim, so we only apply on data with dims
+                if array.ndim > 0:
+                    array = np.ascontiguousarray(array)
+        if isinstance(array, torch.Tensor):
+            non_blocking = True
+            if device is not None and device.type in TORCH_BLOCKING_DEVICES:
+                non_blocking = False
+            data_out = array.to(
+                dtype=dtype, device=device, non_blocking=non_blocking)
+            if data_out is not None:
+                return data_out
+            return array
+        return torch.as_tensor(array, dtype=dtype, device=device)
+
+    @classmethod
+    def torch_to_np_or_cp(
+            cls,
+            array: torch.Tensor,
+            dtype: Optional[TypeDType] = None,
+            device: Optional[TypeDevice] = None,
+    ):
+        if device == 'cpu':
+            return cls.to_numpy(array, dtype, device)
+        elif device == 'cuda':
+            return cls.to_cupy(array, dtype, device)
+        raise ValueError(
+            f"torch_to_np_or_cp only supports device='cpu' or 'cuda', got device='{device}'."
+        )
+
+    @classmethod
+    def to(
+            cls,
+            array: TypeArrayLike,
+            dtype: Optional[TypeDType] = None,
+            device: Optional[TypeDevice] = None,
+            backend: Optional[Union[
+                TypeArrayBackend,
+                TypeArrayLike,
+            ]] = None,
+    ):
+
+        if backend is None:
+            if isinstance(array, np.ndarray):
+                backend = 'numpy'
+            elif HAS_TORCH and isinstance(array, torch.Tensor):
+                backend = 'torch'
+            elif HAS_CUPY and isinstance(array, cp.ndarray):
+                backend = 'cupy'
+            elif isinstance(array, list):
+                backend = 'list'
+            else:
+                raise TypeError(
+                    f"Unsupported array type: {type(array)}. "
+                    "Expected one of: np.ndarray, torch.Tensor, cp.ndarray, list, tuple."
+                )
+        elif isinstance(backend, str):
+            if backend not in {'numpy', 'cupy', 'torch', 'list'}:
+                raise ValueError(
+                    f"Unsupported backend: {backend}. "
+                    "Expected one of: 'numpy', 'cupy', 'torch', 'list'."
+                )
+        else:
+            backend, _device = cls.get_backend_n_device(backend)
+            if device is None:
+                device = _device
+
+        if backend == 'numpy':
+            to_array_fn = cls.to_numpy
+        elif backend == 'cupy':
+            to_array_fn = cls.to_cupy
+        elif backend == 'torch':
+            to_array_fn = cls.to_torch
+        elif backend == 'list':
+            to_array_fn = cls.to_list
+        else:
+            raise ValueError(
+                f"Unsupported to: {backend}. "
+                "Expected one of: 'numpy', 'cupy', 'torch', 'list', 'tuple'."
+            )
+        return to_array_fn(array=array, dtype=dtype, device=device)
+
+    @classmethod
+    def to_dst(
+            cls,
+            array: TypeArrayLike,
+            dst: TypeArrayLike,
+            dtype: Optional[TypeDType] = None,
+            device: Optional[TypeDevice] = None,
+    ):
+        return cls.to(array=array, dtype=dtype, device=device, backend=dst)
+
+    @classmethod
+    def to_cuda(
+            cls,
+            x: TypeArrayLike,
+            backend: Literal['cupy', 'torch'] = None,
+            strict=False,
+    ) -> TypeArrayLike:
+
+        if HAS_CUPY and isinstance(x, cp.ndarray):
+            return x
+        if HAS_TORCH and isinstance(x, torch.Tensor):
+            if cls.convert_device_to_string(x.device) == 'cuda':
+                return x
+            return cls.to_torch(x, device='cuda')
+
+        if backend is None:
+            if HAS_CUPY and CUPY_CUDA_AVAILABLE:
+                backend = 'cupy'
+            elif HAS_TORCH and TORCH_CUDA_AVAILABLE:
+                backend = 'torch'
+
+        if backend is None:
+            if strict:
+                raise RuntimeError(
+                    "Failed to find a CUDA-enabled backend. "
+                    "Please install cupy or torch with CUDA support."
+                )
+            else:
+                return x
+
+        if backend == 'cupy':
+            if not CUPY_CUDA_AVAILABLE:
+                if strict:
+                    raise RuntimeError(
+                        "Failed to find a CUDA-enabled cupy. "
+                        "Please install cupy with CUDA support."
+                    )
+                else:
+                    return x
+            return cls.to_cupy(x)
+        elif backend == 'torch':
+            if not TORCH_CUDA_AVAILABLE:
+                if strict:
+                    raise RuntimeError(
+                        "Failed to find a CUDA-enabled torch. "
+                        "Please install torch with CUDA support."
+                    )
+                else:
+                    return x
+            return cls.to_torch(x, device='cuda')
+        else:
+            if strict:
+                raise ValueError(
+                    f"Unknown backend: {backend}. "
+                    "Expected one of: 'cupy', 'torch'."
+                )
+            else:
+                return x
+
+    @classmethod
+    def _array_like[T: NPGeneric](
+            cls,
+            array: TypeArrayLike[T],
+            mode: Literal['empty', 'zeros', 'ones'] = 'ones',
+            dtype: Optional[TypeDType] = None,
+            device: Optional[TypeDevice] = None,
+    ) -> TypeArrayLike[T]:
+        if isinstance(array, np.ndarray):
+            if dtype is not None:
+                dtype = cls.convert_dtype_to_string(dtype)
+            if device is not None:
+                device = cls.convert_device_to_string(device)
+                if device != 'cpu':
+                    raise ValueError(
+                        f"empty_like only supports device='cpu', got device='{device}'."
+                    )
+            create_kwargs = {'dtype': dtype}
+            _nplib = np
+        elif HAS_CUPY and isinstance(array, cp.ndarray):
+            if dtype is not None:
+                dtype = cls.convert_dtype_to_string(dtype)
+            if device is not None:
+                device = cls.convert_device_to_string(device)
+                if device != 'cuda':
+                    raise ValueError(
+                        f"empty_like only supports device='cuda', got device='{device}'.")
+            create_kwargs = {'dtype': dtype}
+            _nplib = cp
+        elif HAS_TORCH and isinstance(array, torch.Tensor):
+            if dtype is not None:
+                dtype = cls.convert_dtype_to_torch(dtype)
+            if device is not None:
+                device = cls.convert_device_to_torch(device)
+            create_kwargs = {'dtype': dtype, 'device': device}
+            _nplib = torch
+        else:
+            raise TypeError(
+                f"Unsupported array type: {type(array)}. "
+                "Expected one of: np.ndarray, torch.Tensor, cp.ndarray"
+            )
+        if mode not in {'empty', 'zeros', 'ones'}:
+            raise ValueError(
+                f"Unknown mode: {mode}. Expected 'empty', 'zeros', or 'ones'.")
+        return getattr(_nplib, f'{mode}_like')(array, **create_kwargs)
+
+    @classmethod
+    def empty_like[T: NPGeneric](
+            cls,
+            array: TypeArrayLike[T],
+            dtype: Optional[TypeDType] = None,
+            device: Optional[TypeDevice] = None,
+    ) -> TypeArrayLike[T]:
+        return cls._create_array(
+            target=array, mode='empty_like', dtype=dtype, device=device)
+
+    @classmethod
+    def zeros_like[T: NPGeneric](
+            cls,
+            array: TypeArrayLike[np.generic],
+            dtype: Optional[TypeDType] = None,
+            device: Optional[TypeDevice] = None,
+    ) -> TypeArrayLike[T]:
+        return cls._create_array(
+            target=array, mode='zeros_like', dtype=dtype, device=device)
+
+    @classmethod
+    def ones_like[T: NPGeneric](
+            cls,
+            array: TypeArrayLike[np.generic],
+            dtype: Optional[TypeDType] = None,
+            device: Optional[TypeDevice] = None,
+    ) -> TypeArrayLike[T]:
+        return cls._create_array(
+            target=array, mode='ones_like', dtype=dtype, device=device)
+
+    @classmethod
+    def _create_array(
+            cls,
+            target: Union[int, Sequence[int], TypeArrayLike[np.generic]],
+            mode: Literal['empty', 'zeros', 'ones', 'empty_like', 'zeros_like', 'ones_like'],
+            backend: Optional[Union[
+                TypeArrayBackend,
+                TypeArrayLike,
+            ]] = None,
+            dtype: Optional[TypeDType] = None,
+            device: Optional[TypeDevice] = None,
+    ) -> TypeArrayLike[np.generic]:
+
+        # --- Normalize mode
+        is_like_mode = mode in {'empty_like', 'zeros_like', 'ones_like'}
+        is_shape_mode = mode in {'empty', 'zeros', 'ones'}
+        if not (is_like_mode or is_shape_mode):
+            raise ValueError(
+                "Unknown mode: {mode}. Expected one of: "
+                "'empty', 'zeros', 'ones', 'empty_like', 'zeros_like', 'ones_like'."
+            )
+
+        if device is not None:
+            device = cls.convert_device_to_string(device)
+        # --- Resolve backend & device
+        if is_like_mode:
+            if backend is not None:
+                raise ValueError(
+                    f"backend is not allowed for mode='{mode}'.")
+            # validate first to avoid helper raising obscure errors
+            if not cls.is_array(target):
+                raise TypeError(
+                    f"Unsupported target type: {type(target)}. "
+                    "Expected one of: np.ndarray, torch.Tensor, cp.ndarray"
+                )
+            creation_backend, inferred_device = cls.get_backend_n_device(target)
+            creation_device = device if device is not None else inferred_device
+        else:
+            # shape-based creation requires a backend
+            if backend is None:
+                # Try to infer available backend based on device
+                if device is not None and device == 'cuda':
+                    if HAS_CUPY and CUPY_CUDA_AVAILABLE:
+                        backend = 'cupy'
+                    elif HAS_TORCH and TORCH_CUDA_AVAILABLE:
+                        backend = 'torch'
+                    else:
+                        raise RuntimeError(
+                            "CUDA is not available. "
+                            "Please install cupy or torch to use CUDA arrays."
+                        )
+                else:
+                    backend = 'numpy'
+
+            if isinstance(backend, str):
+                creation_backend = backend
+                creation_device = device
+            else:
+                creation_backend, inferred_device = cls.get_backend_n_device(backend)
+                creation_device = device if device is not None else inferred_device
+        creation_dtype = dtype
+
+        # --- Prepare backend-specific kwargs
+        if creation_backend == 'numpy':
+            # device constraint (only if explicitly provided)
+            if creation_device is not None and creation_device != 'cpu':
+                raise ValueError(f"NumPy only supports device='cpu', got '{creation_device}'.")
+            if creation_dtype is not None:
+                creation_dtype = cls.convert_dtype_to_string(creation_dtype)
+            nplib = np
+            creation_kwargs = {'dtype': creation_dtype}
+
+        elif creation_backend == 'cupy':
+            if not HAS_CUPY:
+                raise RuntimeError(
+                    "cupy is not installed. Please install cupy to use cupy arrays."
+                )
+            if creation_device is not None and creation_device != 'cuda':
+                raise ValueError(f"CuPy only supports device='cuda', got '{creation_device}'.")
+            if creation_dtype is not None:
+                creation_dtype = cls.convert_dtype_to_string(creation_dtype)
+            nplib = cp
+            creation_kwargs = {'dtype': creation_dtype}
+        elif creation_backend == 'torch':
+            if not HAS_TORCH:
+                raise RuntimeError(
+                    "torch is not installed. Please install torch to use torch arrays."
+                )
+            if creation_dtype is not None:
+                creation_dtype = cls.convert_dtype_to_torch(creation_dtype)
+            creation_kwargs = {'dtype': creation_dtype, 'device': creation_device}
+            nplib = torch
+        else:
+            raise TypeError(
+                f"Unsupported backend: {creation_backend}. "
+                "Expected one of: 'numpy', 'cupy', 'torch'."
+            )
+        out_array = getattr(nplib, f'{mode}')(target, **creation_kwargs)
+        if backend is not None:
+            if isinstance(backend, str) and backend != creation_backend:
+                out_array = cls.to(out_array, dtype=dtype, device=device, backend=backend)
+        return out_array
+
+    @classmethod
+    def empty(
+            cls,
+            shape: Union[int, Sequence[int]],
+            dtype: Optional[TypeDType] = None,
+            device: Optional[TypeDevice] = None,
+            backend: Optional[Union[
+                TypeArrayBackend,
+                TypeArrayLike,
+            ]] = None,
+    ):
+        return cls._create_array(
+            target=shape, mode='empty', dtype=dtype, device=device, backend=backend)
+
+    @classmethod
+    def zeros(
+            cls,
+            shape: Union[int, Sequence[int]],
+            dtype: Optional[TypeDType] = None,
+            device: Optional[TypeDevice] = None,
+            backend: Optional[Union[
+                TypeArrayBackend,
+                TypeArrayLike,
+            ]] = None,
+    ):
+        return cls._create_array(
+            target=shape, mode='zeros', dtype=dtype, device=device, backend=backend)
+
+    @classmethod
+    def ones(
+            cls,
+            shape: Union[int, Sequence[int]],
+            dtype: Optional[TypeDType] = None,
+            device: Optional[TypeDevice] = None,
+            backend: Optional[Union[
+                TypeArrayBackend,
+                TypeArrayLike,
+            ]] = None,
+    ):
+        return cls._create_array(
+            target=shape, mode='ones', dtype=dtype, device=device, backend=backend)
+
+    @classmethod
+    def isin(cls, array: TypeArrayLike, test_elements: TypeArrayLike):
+        if isinstance(array, np.ndarray):
+            _isin_fn = np.isin
+            _to_array_fn = cls.to_numpy
+        elif HAS_CUPY and isinstance(array, cp.ndarray):
+            _isin_fn = cp.isin
+            _to_array_fn = cls.to_cupy
+        elif HAS_TORCH and isinstance(array, torch.Tensor):
+            _isin_fn = torch.isin
+            _to_array_fn = cls.to_torch
+        else:
+            raise TypeError(
+                f"Unsupported array type: {type(array)}. "
+                "Expected one of: np.ndarray, cp.ndarray, torch.Tensor."
+            )
+        if cls.is_array(test_elements) or isinstance(test_elements, Sequence):
+            test_elements = _to_array_fn(test_elements)
+        return _isin_fn(array, test_elements)
+
+    @classmethod
+    def where(
+            cls, condition: TypeArrayLike, x: TypeArrayLike, y: TypeArrayLike
+    ) -> TypeArrayLike:
+        if isinstance(condition, np.ndarray):
+            _where_fn = np.where
+            _to_array_fn = cls.to_numpy
+        elif HAS_CUPY and isinstance(condition, cp.ndarray):
+            _where_fn = cp.where
+            _to_array_fn = cls.to_cupy
+        elif HAS_TORCH and isinstance(condition, torch.Tensor):
+            _where_fn = torch.where
+            _to_array_fn = cls.to_torch
+        else:
+            raise TypeError(
+                f"Unsupported condition type: {type(condition)}. "
+                "Expected one of: np.ndarray, cp.ndarray, torch.Tensor."
+            )
+        if cls.is_array(x):
+            x = _to_array_fn(x)
+        if cls.is_array(y):
+            y = _to_array_fn(y)
+        return _where_fn(condition, x, y)
+
+    @staticmethod
+    def clip[T: NPGeneric](
+            x: TypeArrayLike[T], min=None, max=None, out=None,
+    ) -> TypeArrayLike[T]:
+        if isinstance(x, np.ndarray):
+            x_out = np.clip(x, a_min=min, a_max=max, out=out)
+        elif HAS_CUPY and isinstance(x, cp.ndarray):
+            x_out = cp.clip(x, a_min=min, a_max=max, out=out)
+        elif HAS_TORCH and isinstance(x, torch.Tensor):
+            x_out = torch.clamp(x, min=min, max=max, out=out)
+        else:
+            raise TypeError(
+                f"Unsupported array type: {type(x)}. "
+                "Expected one of: np.ndarray, torch.Tensor, cp.ndarray."
+            )
+        return x_out if x_out is not None else x
+
+    @staticmethod
+    def copy[T](array: TypeArrayLike[T]) -> TypeArrayLike[T]:
+        if isinstance(array, np.ndarray):
+            return array.copy()
+        elif HAS_CUPY and isinstance(array, cp.ndarray):
+            return cp.copy(array)
+        elif HAS_TORCH and isinstance(array, torch.Tensor):
+            out_array = array.clone()
+            out_array.detach_()
+            return out_array
+        elif isinstance(array, Sequence):
+            return pycopy.deepcopy(array)
+        else:
+            raise TypeError(
+                f"Unsupported array type: {type(array)}. "
+                "Expected one of: np.ndarray, torch.Tensor, cp.ndarray, list, tuple."
+            )
+
+    @staticmethod
+    def _var_or_std[T: NPGeneric](
+            x: TypeArrayLike[T],
+            op: Literal['var', 'std'],
+            axis: Union[int, Sequence[int]] = None,
+            keepdims: bool = False,
+            correction: Union[int, float] = 1,
+            out: Optional[TypeArrayLike[T]] = None,
+    ) -> TypeArrayLike[T]:
+        if op not in {'var', 'std'}:
+            raise ValueError(
+                f"Unknown op: {op}. Expected 'var' or 'std'.")
+        if isinstance(x, np.ndarray):
+            _nplib = np
+            _fn_kwargs = dict(
+                axis=axis, keepdims=keepdims, correction=correction, out=out)
+        elif HAS_CUPY and isinstance(x, cp.ndarray):
+            _nplib = cp
+            _fn_kwargs = dict(
+                axis=axis, keepdims=keepdims, correction=correction, out=out)
+        elif HAS_TORCH and isinstance(x, torch.Tensor):
+            _nplib = torch
+            _fn_kwargs = dict(
+                dim=axis, keepdim=keepdims, correction=correction, out=out)
+        else:
+            raise TypeError(
+                f"Unsupported array type: {type(x)}. "
+                "Expected one of: np.ndarray, torch.Tensor, cp.ndarray."
+            )
+
+        _op_fn = getattr(_nplib, op)
+        out_x = _op_fn(x, **_fn_kwargs)
+        return out_x if out_x is not None else out_x
+
+    @classmethod
+    def std[T: NPGeneric](
+            cls,
+            x: TypeArrayLike[T],
+            axis: Union[int, Sequence[int]] = None,
+            keepdims: bool = False,
+            correction: Union[int, float] = 1,
+            out: Optional[TypeArrayLike[T]] = None,
+    ) -> TypeArrayLike[T]:
+        return cls._var_or_std(
+            x, op='std', axis=axis, keepdims=keepdims, correction=correction, out=out)
+
+    @classmethod
+    def var[T: NPGeneric](
+            cls,
+            x: TypeArrayLike[T],
+            axis: Union[int, Sequence[int]] = None,
+            keepdims: bool = False,
+            correction: Union[int, float] = 1,
+            out: Optional[TypeArrayLike[T]] = None,
+    ) -> TypeArrayLike[T]:
+        return cls._var_or_std(
+            x, op='var', axis=axis, keepdims=keepdims, correction=correction, out=out)
+
+    @staticmethod
+    def round[T: NPGeneric](
+            x: TypeArrayLike[T],
+            decimals: int = 0,
+            out: Optional[TypeArrayLike[T]] = None,
+    ) -> TypeArrayLike[T]:
+        if isinstance(x, np.ndarray):
+            _nplib = np
+        elif HAS_CUPY and isinstance(x, cp.ndarray):
+            _nplib = cp
+        elif HAS_TORCH and isinstance(x, torch.Tensor):
+            _nplib = torch
+        else:
+            raise TypeError(
+                f"Unsupported array type: {type(x)}. "
+                "Expected one of: np.ndarray, torch.Tensor, cp.ndarray."
+            )
+        out_x = _nplib.round(x, decimals=decimals, out=out)
+        return out_x if out_x is not None else out_x
+
+    @staticmethod
+    def argmax(
+            array: TypeArrayLike[NPGeneric], axis: Optional[int] = None
+    ) -> TypeArrayLike[np.int64]:
+        if isinstance(array, np.ndarray):
+            return np.argmax(array, axis=axis)
+        elif HAS_CUPY and isinstance(array, cp.ndarray):
+            return cp.argmax(array, axis=axis)
+        elif HAS_TORCH and isinstance(array, torch.Tensor):
+            return torch.argmax(array, dim=axis)
+        else:
+            raise TypeError(
+                f"Unsupported array type: {type(array)}. "
+            )
+
+    @classmethod
+    def _norm_pad_width(
+            cls,
+            pad_width: TypePadWidth,
+            n_dims,
+    ) -> Sequence[Sequence[int]]:
+        if cls.is_array(pad_width):
+            pad_width = cls.to_list(pad_width)
+
+        # ---- normalize pad_width -> tuple[tuple[int, int], ...] length n_dims
+        # int -> same (k,k) for all dims
+        if isinstance(pad_width, int):
+            return tuple((pad_width, pad_width) for _ in range(n_dims))
+
+        # nested sequence: ((b0,a0), (b1,a1), ...)
+        if isinstance(pad_width, Sequence) and pad_width and isinstance(pad_width[0], Sequence):
+            if len(pad_width) != n_dims:
+                raise ValueError(f"pad_width has {len(pad_width)} dims; expected {n_dims}.")
+            out = []
+            for i, p in enumerate(pad_width):
+                if len(p) != 2:
+                    raise ValueError(f"pad_width[{i}] must be (before, after); got {p}.")
+                b, a = int(p[0]), int(p[1])
+                if b < 0 or a < 0:
+                    raise ValueError("Negative padding is not supported.")
+                out.append((b, a))
+            return tuple(out)
+
+        # flat sequence: length n  -> symmetric per-dim
+        #               length 2n -> explicit (before0, after0, before1, after1, ...)
+        if isinstance(pad_width, Sequence):
+            flat = [int(v) for v in pad_width]
+            if any(v < 0 for v in flat):
+                raise ValueError("Negative padding is not supported.")
+            if len(flat) == n_dims:
+                return tuple((k, k) for k in flat)
+            if len(flat) == 2 * n_dims:
+                return tuple((flat[2 * i], flat[2 * i + 1]) for i in range(n_dims))
+
+        raise ValueError(
+            "pad_width must be int, sequence of length N, "
+            "sequence of length 2N, or sequence of N pairs."
+        )
+
+    @classmethod
+    def pad[T: TypeArrayLike[NPGeneric]](
+            cls,
+            array: T,
+            pad_width: TypePadWidth,
+            mode: str,
+            constant_values=0,
+    ) -> T:
+        n_dims = array.ndim
+
+        pad_pairs = cls._norm_pad_width(pad_width, n_dims)  # ((b0,a0), (b1,a1), ...)
+
+        if isinstance(array, np.ndarray):
+            _nplib = np
+            _pad_fn = functools.partial(
+                _nplib.pad,
+                pad_width=pad_pairs, mode=mode, constant_values=constant_values)
+        elif HAS_CUPY and isinstance(array, cp.ndarray):
+            _nplib = cp
+            _pad_fn = functools.partial(
+                _nplib.pad,
+                pad_width=pad_pairs, mode=mode, constant_values=constant_values)
+        elif HAS_TORCH and isinstance(array, torch.Tensor):
+            _nplib = torch
+
+            # map numpy-like names to torch
+            if mode == "edge":
+                torch_mode = "replicate"
+            elif mode == "wrap":
+                torch_mode = "circular"
+            elif mode in ("constant", "reflect", "replicate", "circular"):
+                torch_mode = mode
+            elif mode == "symmetric":
+                # PyTorch does not support 'symmetric' (NumPy's includes edge pixel)
+                raise ValueError("PyTorch does not support mode='symmetric'. Use 'reflect' or 'replicate'.")
+            else:
+                raise ValueError(f"Unsupported pad mode for torch: {mode!r}")
+
+            # torch expects (pad_last_before, pad_last_after, pad_second_last_before, pad_second_last_after, ...)
+            torch_pad = []
+            for (b, a) in reversed(pad_pairs):
+                torch_pad.extend([b, a])
+            torch_pad = tuple(torch_pad)
+
+            _pad_fn = functools.partial(
+                F.pad, pad=torch_pad, mode=torch_mode, value=constant_values)
+        else:
+            raise TypeError(
+                f"Unsupported array type: {type(array)}. "
+                "Expected one of: np.ndarray, torch.Tensor, cp.ndarray."
+            )
+        out_array = _pad_fn(array)
+        return out_array
+
+    @classmethod
+    def unpad[T: TypeArrayLike[NPGeneric]](
+            cls,
+            array: T,
+            pad_width: TypePadWidth,
+    ) -> T:
+        norm_pad_width = cls._norm_pad_width(pad_width, array.ndim)
+        slices: List[slice] = []
+        for c in cls.to_list(norm_pad_width):
+            e = None if c[1] == 0 else -c[1]
+            slices.append(slice(c[0], e))
+        return array[tuple(slices)]
+
+    @staticmethod
+    def expand_dims[T: TypeArrayLike[NPGeneric]](array: T, axis: int) -> T:
+        if isinstance(array, np.ndarray):
+            return np.expand_dims(array, axis=axis)
+        elif HAS_CUPY and isinstance(array, cp.ndarray):
+            return cp.expand_dims(array, axis=axis)
+        elif HAS_TORCH and isinstance(array, torch.Tensor):
+            return torch.unsqueeze(array, dim=axis)
+        else:
+            raise TypeError(
+                f"Unsupported array type: {type(array)}. "
+                "Expected one of: np.ndarray, torch.Tensor, cp.ndarray.")
+
+    @staticmethod
+    def squeeze[T: TypeArrayLike[NPGeneric]](array: T, axis: int) -> T:
+        if isinstance(array, np.ndarray):
+            return np.squeeze(array, axis=axis)
+        elif HAS_CUPY and isinstance(array, cp.ndarray):
+            return cp.squeeze(array, axis=axis)
+        elif HAS_TORCH and isinstance(array, torch.Tensor):
+            return torch.squeeze(array, dim=axis)
+        else:
+            return array.squeeze(axis=axis)
+
+    @classmethod
+    def einsum(cls, subscripts: str, *operands: TypeAlias):
+        backend, device = cls.get_backend_n_device(operands[0])
+        if backend == 'numpy':
+            to_array = cls.to_numpy
+            nplib = np
+        elif backend == 'cupy':
+            to_array = cls.to_cupy
+            nplib = cp
+        elif backend == 'torch':
+            to_array = functools.partial(cls.to_torch, device=device)
+            nplib = torch
+        else:
+            raise TypeError(
+                f"Unsupported backend: {backend}. "
+                "Expected one of: numpy, cupy, torch."
+            )
+        operands = list(map(to_array, operands))
+        return nplib.einsum(subscripts, *operands)
+
+    @staticmethod
+    def flip[T: TypeArrayLike[NPGeneric]](
+            array: T, axis: Union[int, Sequence[int]]
+    ) -> T:
+        if isinstance(array, np.ndarray):
+            return np.flip(array, axis=axis)
+        elif HAS_CUPY and isinstance(array, cp.ndarray):
+            return cp.flip(array, axis=axis)
+        elif HAS_TORCH and isinstance(array, torch.Tensor):
+            if isinstance(axis, int):
+                axis = [axis]
+            return torch.flip(array, dims=axis)
+        else:
+            raise TypeError(
+                f"Unsupported array type: {type(array)}. "
+            )
+
+if not HAS_CUPY:
+    def cupy_not_available(*args, **kwargs):
+        raise RuntimeError("cupy is not available.")
+    ArrayUtils.to_cupy = cupy_not_available
+    del cupy_not_available
+
+if not HAS_TORCH:
+    def torch_not_available(*args, **kwargs):
+        raise RuntimeError("torch is not available.")
+    ArrayUtils.to_torch = torch_not_available
+    ArrayUtils.torch_to_np_or_cp = torch_not_available
+    del torch_not_available
+
+# --- Bind function ---
+is_array = ArrayUtils.is_array
+is_cuda_available = ArrayUtils.is_cuda_available
+get_backend_n_device = ArrayUtils.get_backend_n_device
+infer_backend_from_device = ArrayUtils.infer_backend_from_device
+to_numpy = ArrayUtils.to_numpy
+to_cupy = ArrayUtils.to_cupy
+to_torch = ArrayUtils.to_torch
+torch_to_np_or_cp = ArrayUtils.torch_to_np_or_cp
+to = ArrayUtils.to
+to_dst = ArrayUtils.to_dst
+to_cuda = ArrayUtils.to_cuda
+convert_dtype_to_string = ArrayUtils.convert_dtype_to_string
+convert_dtype_to_numpy = ArrayUtils.convert_dtype_to_numpy
+convert_dtype_to_torch = ArrayUtils.convert_dtype_to_torch
+convert_device_to_string = ArrayUtils.convert_device_to_string
+convert_device_to_torch = ArrayUtils.convert_device_to_torch
+copy = ArrayUtils.copy
+empty_like = ArrayUtils.empty_like
+zeros_like = ArrayUtils.zeros_like
+ones_like = ArrayUtils.ones_like
+empty = ArrayUtils.empty
+zeros = ArrayUtils.zeros
+ones = ArrayUtils.ones
+isin = ArrayUtils.isin
+where = ArrayUtils.where
+clip = ArrayUtils.clip
+std = ArrayUtils.std
+var = ArrayUtils.var
+round = ArrayUtils.round
+argmax = ArrayUtils.argmax
+pad = ArrayUtils.pad
+unpad = ArrayUtils.unpad
+expand_dims = ArrayUtils.expand_dims
+squeeze = ArrayUtils.squeeze
+einsum = ArrayUtils.einsum
+flip = ArrayUtils.flip
