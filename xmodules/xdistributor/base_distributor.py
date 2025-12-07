@@ -150,11 +150,17 @@ class BaseDistributor(ABC, DistributorProtocol):
         torch.distributed.all_gather_object(out_list, x)
         return out_list
 
-    def broadcast_object(self, x: Any, src=0) -> Any:
-        objects = [x]
+    def broadcast_object(self, *x: Any, src=0) -> Any:
+        if len(x) == 0:
+            return None
+        if self.world_size < 2:
+            if len(x) == 1:
+                return x[0]
+            return x
+        objects = [*x]
         torch.distributed.broadcast_object_list(
             objects, src=src)
-        return objects[0]
+        return objects[0] if len(objects) == 1 else objects
 
     @staticmethod
     def collect_rng_states() -> Dict[str, Any]:

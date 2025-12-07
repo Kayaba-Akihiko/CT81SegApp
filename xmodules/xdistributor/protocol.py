@@ -107,7 +107,7 @@ class DistributorProtocol(Protocol):
         raise NotImplementedError
 
     @abstractmethod
-    def broadcast_object(self, x: Any, src=0) -> Any:
+    def broadcast_object(self, *x: Any, src=0) -> Any:
         raise NotImplementedError
 
     @abstractmethod

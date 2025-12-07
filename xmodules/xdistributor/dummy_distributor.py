@@ -31,7 +31,7 @@ class DummyDistributor(BaseDistributor):
             seed=831,
             tracker='tb',
             accelerator='auto',
-            devices='auto',
+            devices: Union[str, int] = 'auto',
             float32_matmul_precision: TypeFloatingMatmulPrecision = 'highest',
             precision: TypePrecision = '32-true',
             strategy: TypeStrategy = 'auto',
@@ -108,11 +108,7 @@ class DummyDistributor(BaseDistributor):
 
     def all_reduce(
             self, x: torch.Tensor, reduce_op='sum') -> torch.Tensor:
-        if reduce_op == 'sum':
-            return x.sum()
-        if reduce_op == 'mean':
-            return x.mean()
-        raise RuntimeError(f'Unknown reduce_op: {reduce_op}')
+        return x
 
     def all_gather(self, x: torch.Tensor) -> torch.Tensor:
         return x.unsqueeze(0)

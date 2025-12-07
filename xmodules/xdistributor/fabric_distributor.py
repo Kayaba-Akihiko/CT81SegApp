@@ -45,7 +45,7 @@ class FabricDistributor(BaseDistributor):
             seed=831,
             tracker='tb',
             accelerator='auto',
-            devices='auto',
+            devices: Union[str, int] = 'auto',
             float32_matmul_precision: TypeFloatingMatmulPrecision = 'highest',
             precision: TypePrecision= '32-true',
             strategy: TypeStrategy = 'auto',
@@ -167,7 +167,7 @@ class FabricDistributor(BaseDistributor):
         return self.fabric.all_reduce(x, reduce_op=reduce_op)
 
     def all_gather(self, x: torch.Tensor) -> torch.Tensor:
-        if self.world_size == 1:
+        if self.world_size < 2:
             return x.unsqueeze(0)  # (1,)
         return self.fabric.all_gather(x)  # (ws, ...) or (...)
 

@@ -5,6 +5,8 @@
 #  This file can not be copied and/or distributed
 #  without the express permission of Yi GU.
 
+from typing import Union
+
 from .base_distributor import TypeBackend, TypeFloatingMatmulPrecision
 from .protocol import DistributorProtocol, TypeCkptState, TypeStrategy, TypePrecision
 from ..xutils import lib_utils
@@ -14,11 +16,18 @@ def get_distributor(
         seed: int,
         tracker='tb',
         accelerator='auto',
-        devices='auto',
+        devices: Union[str, int] = 'auto',
         float32_matmul_precision: TypeFloatingMatmulPrecision = 'highest',
         precision: TypePrecision = '32-true',
         strategy: TypeStrategy = 'auto',
 ) -> DistributorProtocol:
+    if isinstance(devices, str) and devices != 'auto':
+        devices = int(devices)
+    elif isinstance(devices, int):
+        pass
+    else:
+        raise ValueError(f'devices={devices} is not supported.')
+
     if backend == 'none':
         from .dummy_distributor import DummyDistributor
         return DummyDistributor(
