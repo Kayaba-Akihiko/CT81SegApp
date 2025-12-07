@@ -132,14 +132,14 @@ def main():
     image_path = os_utils.format_path_string(opt.image_path)
     model_path = opt.model_path
     if model_path is None:
-        model_path = this_dir / 'nnunet_1res_ct_81_seg.onnx'
+        model_path = this_dir / 'resources' / 'nnunet_1res_ct_81_seg.onnx'
         _logger.info(f'Model path not specified. Using default: {model_path}.')
     else:
         model_path = os_utils.format_path_string(model_path)
 
     norm_config_path = opt.norm_config_path
     if norm_config_path is None:
-        norm_config_path = this_dir / 'nnunet_1res_ct_81_seg_norm.json'
+        norm_config_path = this_dir / 'resources' / 'nnunet_1res_ct_81_seg_norm.json'
         _logger.info(f'Normalization config path not specified. Using default: {norm_config_path}.')
     else:
         norm_config_path = os_utils.format_path_string(norm_config_path)
@@ -148,7 +148,7 @@ def main():
     batch_size = opt.batch_size
     rendering_config_path = opt.rendering_config_path
     if rendering_config_path is None:
-        rendering_config_path = this_dir / 'naist_totalsegmentator_81.json'
+        rendering_config_path = this_dir / 'resources' / 'naist_totalsegmentator_81.json'
         _logger.info(f'Rendering config path not specified. Using default: {rendering_config_path}.')
     else:
         rendering_config_path = os_utils.format_path_string(
