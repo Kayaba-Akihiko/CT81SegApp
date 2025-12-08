@@ -137,6 +137,13 @@ def main():
         )
         _logger.info(config_log_str)
 
+    if xp.HAS_CUPY and xp.CUPY_CUDA_AVAILABLE:
+        import cupy as cp
+        cp.cuda.runtime.setDevice(distributor.local_rank)
+    if xp.HAS_TORCH and xp.TORCH_CUDA_AVAILABLE:
+        import torch
+        torch.cuda.set_device(distributor.local_rank)
+
     device = opt.device
 
     total_start_time = None
@@ -175,7 +182,10 @@ def main():
     if device == 'cpu':
         onnx_providers = ['CPUExecutionProvider']
     elif device == 'cuda':
-        onnx_providers = ['CUDAExecutionProvider', 'CPUExecutionProvider']
+        onnx_providers = [
+            ('CUDAExecutionProvider', {"device_id": distributor.local_rank}),
+            'CPUExecutionProvider'
+        ]
     else:
         raise ValueError(f'Device {distributor.device.type} is not supported.')
 
@@ -257,13 +267,13 @@ def main():
                 pred_labels = [x[1] for x in pred_labels]
                 pred_label = np.concatenate(pred_labels, axis=0)
             del pred_labels
-        assert isinstance(pred_label, np.ndarray)
 
         prediction_saving_time = None
         if distributor.is_main_process():
             output_dir.mkdir(parents=True, exist_ok=True)
             labelmap_save_path = output_dir / 'pred_label.mha'
             _logger.info(f'Save prediction to {labelmap_save_path} .')
+            assert isinstance(pred_label, np.ndarray)
             start_time = time.perf_counter()
             metaimage_utils.write(
                 labelmap_save_path,

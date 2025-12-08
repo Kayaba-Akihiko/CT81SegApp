@@ -113,7 +113,7 @@ class Inferencer:
                 _iob.bind_output(
                     name=output_name,
                     device_type='cpu',
-                    device_id=0,
+                    device_id=-1,
                     element_type=_x.dtype,
                     shape=_x.shape,
                     buffer_ptr=_x.ctypes.data,
@@ -131,7 +131,7 @@ class Inferencer:
                 _iob.bind_input(
                     name=input_name,
                     device_type='cuda',
-                    device_id=0,
+                    device_id=_x.device.id,
                     element_type=_x.dtype,
                     shape=_x.shape,
                     buffer_ptr=_x.data.ptr,
@@ -143,7 +143,7 @@ class Inferencer:
                 _iob.bind_output(
                     name=output_name,
                     device_type='cuda',
-                    device_id=0,
+                    device_id=_x.device.id,
                     element_type=_x.dtype,
                     shape=_x.shape,
                     buffer_ptr=_x.data.ptr,

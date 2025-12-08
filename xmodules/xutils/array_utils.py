@@ -147,13 +147,13 @@ class ArrayUtils:
     @staticmethod
     def get_backend_n_device(
             x: TypeArrayLike
-    ) -> Tuple[TypeArrayBackend, TypeDevice]:
+    ) -> Tuple[TypeArrayBackend, TypeDevice, int]:
         if isinstance(x, np.ndarray):
-            return 'numpy', 'cpu'
+            return 'numpy', 'cpu', -1
         elif HAS_CUPY and isinstance(x, cp.ndarray):
-            return 'cupy', 'cuda'
+            return 'cupy', 'cuda', x.device.id
         elif HAS_TORCH and isinstance(x, torch.Tensor):
-            return 'torch', x.device
+            return 'torch', x.device, x.get_device()
         else:
             raise TypeError(
                 f"Unsupported array type: {type(x)}. "
@@ -486,7 +486,7 @@ class ArrayUtils:
                     "Expected one of: 'numpy', 'cupy', 'torch', 'list'."
                 )
         else:
-            backend, _device = cls.get_backend_n_device(backend)
+            backend, _device, _ = cls.get_backend_n_device(backend)
             if device is None:
                 device = _device
 
@@ -685,7 +685,7 @@ class ArrayUtils:
                     f"Unsupported target type: {type(target)}. "
                     "Expected one of: np.ndarray, torch.Tensor, cp.ndarray"
                 )
-            creation_backend, inferred_device = cls.get_backend_n_device(target)
+            creation_backend, inferred_device, _ = cls.get_backend_n_device(target)
             creation_device = device if device is not None else inferred_device
         else:
             # shape-based creation requires a backend
@@ -708,7 +708,7 @@ class ArrayUtils:
                 creation_backend = backend
                 creation_device = device
             else:
-                creation_backend, inferred_device = cls.get_backend_n_device(backend)
+                creation_backend, inferred_device, _ = cls.get_backend_n_device(backend)
                 creation_device = device if device is not None else inferred_device
         creation_dtype = dtype
 
@@ -1104,7 +1104,7 @@ class ArrayUtils:
 
     @classmethod
     def einsum(cls, subscripts: str, *operands: TypeAlias):
-        backend, device = cls.get_backend_n_device(operands[0])
+        backend, device, _ = cls.get_backend_n_device(operands[0])
         if backend == 'numpy':
             to_array = cls.to_numpy
             nplib = np
