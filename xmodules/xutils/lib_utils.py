@@ -8,7 +8,7 @@
 import functools
 from importlib import import_module
 from importlib.util import resolve_name
-from typing import Tuple, Union, Optional
+from typing import Tuple, Union, Optional, Any
 from types import ModuleType
 
 
@@ -16,23 +16,25 @@ class LibUtils:
     @staticmethod
     @functools.lru_cache()
     def import_health(
-            name: str, package: Optional[str] = None,
-    ) -> Tuple[Optional[ModuleType], str]:
+        name: str, package: Optional[str] = None,
+    ) -> Tuple[Optional[Any], str]:
         """
-        Import a module safely.
+        Import a module or attribute safely.
 
-        Supports both:
+        Supports:
             import_health("torch.nn.functional")
             import_health("functional", package="torch.nn")
+            import_health("lightning.Fabric")
+            import_health("Fabric", package="lightning")
 
-        Returns (module_or_None, reason):
-          - "ok"                         -> imported successfully
-          - "not_found"                  -> the target module or a prefix not found
+        Returns (obj_or_None, reason):
+          - "ok"                         -> imported successfully (module or attribute)
+          - "not_found"                  -> the target (module/attr) or a prefix not found
           - "dependency_missing: <name>" -> missing dependency during import
           - "invalid_relative: <Exc>"    -> relative import invalid for given package
           - "import_error: <ExcType>"    -> other import-time error
         """
-        # Normalize the target name
+        # Normalize the target name for resolve_name/import_module
         if package and not name.startswith((".", package)):
             # If user passed "functional" with package="torch.nn", treat it like ".functional"
             qualified_name = f".{name}"
@@ -41,15 +43,47 @@ class LibUtils:
 
         # Resolve to fully qualified name for consistent error checks
         try:
-            target_fullname = resolve_name(qualified_name, package) if qualified_name.startswith(".") else qualified_name
+            if qualified_name.startswith("."):
+                target_fullname = resolve_name(qualified_name, package)
+            else:
+                target_fullname = qualified_name
         except (TypeError, ValueError) as e:
             return None, f"invalid_relative: {type(e).__name__}"
 
+        # Helper: try interpreting target_fullname as "<parent>.<attr>"
+        def _try_attribute_import(fullname: str):
+            if "." not in fullname:
+                return None, "not_found"
+
+            parent_name, attr_name = fullname.rsplit(".", 1)
+            try:
+                parent_mod = import_module(parent_name)
+            except ModuleNotFoundError:
+                # parent module itself not importable -> treat as not_found
+                return None, "not_found"
+            except Exception as e:
+                return None, f"import_error: {type(e).__name__}"
+
+            if not hasattr(parent_mod, attr_name):
+                return None, "not_found"
+
+            try:
+                return getattr(parent_mod, attr_name), "ok"
+            except Exception as e:
+                return None, f"import_error: {type(e).__name__}"
+
+        # First attempt: treat the name as a module
         try:
-            module = import_module(qualified_name, package)
-            return module, "ok"
+            obj = import_module(qualified_name, package)
+            return obj, "ok"
 
         except ModuleNotFoundError as e:
+            # Fallback: treat as attribute path on a parent module
+            attr_obj, attr_status = _try_attribute_import(target_fullname)
+            if attr_status == "ok":
+                return attr_obj, "ok"
+
+            # Attribute fallback failed → classify original error
             missing = e.name
             if missing == target_fullname or target_fullname.startswith(missing + "."):
                 return None, "not_found"
@@ -61,14 +95,14 @@ class LibUtils:
 
     @classmethod
     @functools.lru_cache()
-    def try_import(cls, mod_name: str, package: Optional[str] = None, ) -> Union[ModuleType, None]:
-        module, status = cls.import_health(mod_name, package=package)
-        return module
+    def try_import(cls, mod_name: str, package: Optional[str] = None, ) -> Union[Any, None]:
+        obj, status = cls.import_health(mod_name, package=package)
+        return obj if status == "ok" else None
 
     @classmethod
     @functools.lru_cache()
     def import_available(cls, mod_name: str, package: Optional[str] = None, ) -> bool:
-        module, status = cls.import_health(mod_name, package=package)
+        _, status = cls.import_health(mod_name, package=package)
         return status == "ok"
 
 

@@ -92,7 +92,7 @@ class DicomUtils:
 
         files, file_paths = cls._dcmread_folder(
             read_path=read_path,
-            name_re_pattern=name_regex,
+            name_regex=name_regex,
             n_workers=n_workers,
             progress_bar=progress_bar,
             progress_desc=progress_desc,
@@ -184,7 +184,7 @@ class DicomUtils:
     def _dcmread_folder(
             cls,
             read_path: TypePathLike,
-            name_re_pattern='.*\\.dcm$',
+            name_regex='.*\\.dcm$',
             n_workers: int = 0,
             progress_bar: bool = True,
             progress_desc='',
@@ -196,7 +196,7 @@ class DicomUtils:
 
         slice_entries = []
         for slice_entry in os_utils.scan_dirs_for_file(
-                read_path, name_regex=name_re_pattern):
+                read_path, name_regex=name_regex):
             slice_entries.append(slice_entry)
 
         args = [(slice_entry.path, True) for slice_entry in slice_entries]
@@ -223,7 +223,7 @@ class DicomUtils:
             file_paths.append(file_path)
         if n_invalid > 0:
             _logger.warning(
-                f'Found {n_invalid} invalid from total {n_total} files with name pattern {name_re_pattern} in {read_path}')
+                f'Found {n_invalid} invalid from total {n_total} files with name pattern {name_regex} in {read_path}')
         return files, file_paths
 
     @staticmethod

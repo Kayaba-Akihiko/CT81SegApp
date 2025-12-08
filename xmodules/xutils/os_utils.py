@@ -130,7 +130,7 @@ class OSUtils:
                 Tuple[TypePathLike, ...],
                 Sequence[TypePathLike]
             ],
-            name_re_pattern: Optional[Union[str, re.Pattern]] = None,
+            name_regex: Optional[Union[str, re.Pattern]] = None,
             recursive: bool = False,
             follow_symlinks=False,
     ) -> Iterable[os.DirEntry]:
@@ -140,7 +140,7 @@ class OSUtils:
         return cls._scan_dirs(
             paths=paths,
             allow_fun=allow_file,
-            name_regex=name_re_pattern,
+            name_regex=name_regex,
             recursive=recursive,
             follow_symlinks=follow_symlinks,
         )
@@ -152,7 +152,7 @@ class OSUtils:
                 Union[TypePathLike, List[TypePathLike]],
                 Tuple[TypePathLike, ...]
             ],
-            name_re_pattern: Optional[Union[str, re.Pattern]] = None,
+            name_regex: Optional[Union[str, re.Pattern]] = None,
             recursive: bool = False,
             follow_symlinks=False,
     ) -> Iterable[os.DirEntry]:
@@ -162,7 +162,7 @@ class OSUtils:
         return cls._scan_dirs(
             paths=paths,
             allow_fun=allow_dir,
-            name_regex=name_re_pattern,
+            name_regex=name_regex,
             recursive=recursive,
             follow_symlinks=follow_symlinks,
         )

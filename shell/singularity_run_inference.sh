@@ -13,14 +13,22 @@ ct_input=${script_dir}/input/UZU00001_CT1
 output_dir=${script_dir}/output
 batch_size=4
 num_core=8
+num_gpus=2
 
-simg_path="${script_dir}"/src/py3.12-torch2.8-cu12.8_latest.sif
+# simg_path="${script_dir}"/src/resources/py3.12-torch2.8-cu12.8_latest.sif
+simg_path=/win/flounder/user/koku/sif/py3.12-torch2.8-cu12.8_latest.sif
 
-singularity exec --nv \
+echo "[Start] $(date)"
+start=$(date +%s)
+singularity exec --nv --nvccli \
     --env LIBGL_ALWAYS_SOFTWARE=1 \
     --env NUMEXPR_MAX_THREADS=${num_core} \
     "${simg_path}" \
-    python "${script_dir}"/src/basic_2d.py \
-    -i "${ct_input}" -o "${output_dir}" \
-    -n "${num_core}" -b "${batch_size}" \
+    python "${script_dir}"/src/main.py \
+    --image_path "${ct_input}" --output_dir "${output_dir}" \
+    --n_workers "${num_core}" --batch_size "${batch_size}" \
+    --dist_devices "${num_gpus}" \
     --dicom_name_regex ".*"
+end=$(date +%s)
+echo "[End] $(date)"
+echo "Elapsed: $((end - start)) sec"
