@@ -5,7 +5,7 @@
 #  This file can not be copied and/or distributed
 #  without the express permission of Yi GU.
 
-from typing import Tuple, Optional, Union, Dict, Any, TypeAlias, Literal
+from typing import Tuple, Optional, Union, Dict, Any, TypeAlias, Literal, Type, TypeVar, Protocol, List
 import io
 
 import numpy as np
@@ -13,6 +13,9 @@ import numpy.typing as npt
 import vtk
 from vtkmodules.util import numpy_support as vtknp
 import imageio.v3 as iio
+
+TypeView: TypeAlias = Literal['front', 'back', 'left', 'right', 'top', 'bottom']
+
 
 NUMPY_VTK_DTYPE_MAP = {
     np.uint8: vtk.VTK_UNSIGNED_CHAR,
@@ -24,7 +27,10 @@ NUMPY_VTK_DTYPE_MAP = {
     np.float64: vtk.VTK_DOUBLE,
 }
 
-TypeView: TypeAlias = Literal['front', 'back', 'left', 'right', 'top', 'bottom']
+class SupportsImageInput(Protocol):
+    def SetInputData(self, data: vtk.vtkImageData) -> None: ...
+    def SetInputConnection(self, out: vtk.vtkAlgorithmOutput) -> None: ...
+
 
 class VTKUtils:
 
@@ -59,10 +65,86 @@ class VTKUtils:
             ren.SetOcclusionRatio(occlusion_ratio)
         return ren, renWin
 
-    @staticmethod
+    @classmethod
+    def render_view_as_np_image(
+            cls,
+            ren: vtk.vtkRenderer,
+            win: vtk.vtkRenderWindow,
+            view: Union[TypeView, List[TypeView]],
+            view_camera_center: Union[Tuple[float, float, float], List[Tuple[float, float, float]]],
+            view_camera_offset: Union[float, List[float]] = 2500.0,
+            view_camera_zoom: Union[float, List[float]] = 1.6,
+            out_size: Optional[Union[Tuple[int, int], List[Tuple[int, int]]]] = None,
+    ):
+        if isinstance(view, str):
+            view = [view]
+        elif isinstance(view, (list, tuple)):
+            pass
+        else:
+            raise ValueError(f"Unknown view type: {type(view)}")
+
+        if (n_views :=len(view)) == 0:
+            raise ValueError("Empty view list.")
+
+        if not isinstance(view_camera_center, (list, tuple)):
+            raise ValueError(f"Invalid view_camera_center: {view_camera_center}")
+        if len(view_camera_center) == 0:
+            raise ValueError("Empty view_camera_center list.")
+        if not isinstance(view_camera_center[0], (list, tuple)):
+            view_camera_center = [view_camera_center] * n_views
+        if len(view_camera_center) != n_views:
+            raise ValueError(f"Invalid view_camera_center: {view_camera_center}")
+
+        if not isinstance(view_camera_offset, (list, tuple)):
+            view_camera_offset = [view_camera_offset] * n_views
+        if len(view_camera_offset) != n_views:
+            raise ValueError(f"Invalid view_camera_offset: {view_camera_offset}")
+
+        if not isinstance(view_camera_zoom, (list, tuple)):
+            view_camera_zoom = [view_camera_zoom] * len(view)
+        if len(view_camera_zoom) != len(view):
+            raise ValueError(f"Invalid view_camera_zoom: {view_camera_zoom}")
+
+        if out_size is not None:
+            if isinstance(out_size, (list, tuple)):
+                if len(out_size) == 0:
+                    raise ValueError("Empty out_size list.")
+                if isinstance(out_size[0], (list, tuple)):
+                    if len(out_size) != len(view):
+                        raise ValueError(f"Invalid out_size list: {out_size}")
+                else:
+                    out_size = [out_size] * len(view)
+        else:
+            out_size = [None] * len(view)
+
+        results = []
+        for view_i, camera_center_i, camera_offset_i, camera_zoom_i, out_size_i in zip(
+                view, view_camera_center, view_camera_offset, view_camera_zoom, out_size):
+            view_i: TypeView
+            camera_center_i: Tuple[float, float, float]
+            if out_size_i is not None:
+                win.SetSize(*out_size_i)
+            cls.position_view_camera(
+                ren=ren, view=view_i,
+                center=camera_center_i, cam_offset=camera_offset_i)
+            ren.ResetCameraClippingRange()
+            win.Render()
+            rendered_image = cls.capture_window_as_numpy(win)
+            results.append(rendered_image)
+        if len(results) == 0:
+            raise RuntimeError("No rendered image.")
+        if len(results) == 1:
+            return results[0]
+        return results
+
+
+
+    @classmethod
     def build_volume(
-            image: vtk.vtkImageData,
-            color_table: Dict[str, Tuple[int, float, float, float]],
+            cls,
+            image: Union[vtk.vtkImageData, vtk.vtkAlgorithmOutput],
+            color: Optional[vtk.vtkColorTransferFunction] = None,
+            scalar_opacity: Optional[vtk.vtkPiecewiseFunction] = None,
             interpolation: str = 'linear',
             shade=None,
             specular=None,
@@ -70,19 +152,14 @@ class VTKUtils:
             ambient=None,
             diffuse=None,
             scalar_opacity_unit_distance=None,
+            blend_mode_to_composite=None,
             device='cpu'
     ):
-        # The color transfer function maps voxel intensities to colors.
-        color = vtk.vtkColorTransferFunction()
-        scalar_opacity = vtk.vtkPiecewiseFunction()
-
-        for class_name, (class_id, r, g, b, a) in color_table.items():
-            color.AddRGBPoint(class_id, r, g, b)
-            scalar_opacity.AddPoint(class_id, a)
-
         prop = vtk.vtkVolumeProperty()
-        prop.SetColor(color)
-        prop.SetScalarOpacity(scalar_opacity)
+        if color is not None:
+            prop.SetColor(color)
+        if scalar_opacity is not None:
+            prop.SetScalarOpacity(scalar_opacity)
         if interpolation == 'linear':
             prop.SetInterpolationTypeToLinear()
         elif interpolation == 'nearest':
@@ -101,27 +178,27 @@ class VTKUtils:
             prop.SetDiffuse(diffuse)
         if scalar_opacity_unit_distance is not None:
             prop.SetScalarOpacityUnitDistance(scalar_opacity_unit_distance)
-
         if device == 'cpu':
             mapper = vtk.vtkFixedPointVolumeRayCastMapper()
         elif device == 'cuda':
             mapper = vtk.vtkGPUVolumeRayCastMapper()
         else:
             raise ValueError(f'Device {device} is not supported.')
-        mapper.SetInputData(image)
-        mapper.SetBlendModeToComposite()
+        cls.set_input(mapper, image)
+        if blend_mode_to_composite is not None and blend_mode_to_composite:
+            mapper.SetBlendModeToComposite()
         volume = vtk.vtkVolume()
         volume.SetMapper(mapper)
         volume.SetProperty(prop)
         return volume
 
     @staticmethod
-    def position_camera(
+    def position_view_camera(
             ren: vtk.vtkRenderer,
             view: TypeView,
             center: Tuple[float, float, float],
             cam_offset: Union[float, int] = 0,
-    ):
+    ) -> vtk.vtkCamera:
         cam = ren.GetActiveCamera()
 
         # focal point always looks at the volume center
@@ -149,11 +226,12 @@ class VTKUtils:
             raise ValueError(f"Unknown view '{view}'")
 
         cam.Modified()
+        return cam
 
     @staticmethod
-    def win_to_image(
+    def capture_window_as_numpy(
             win: vtk.vtkRenderWindow
-    ):
+    ) -> npt.NDArray[np.uint8]:
         # Capture window → vtkImageData
         w2if = vtk.vtkWindowToImageFilter()
         w2if.SetInput(win)
@@ -176,14 +254,16 @@ class VTKUtils:
 
         return iio.imread(image_stream)
 
-    @staticmethod
+    @classmethod
     def resample(
-            image: vtk.vtkImageData,
+            cls,
+            image: Union[vtk.vtkImageData, vtk.vtkAlgorithmOutput],
             factor: Union[float, Tuple[float, float, float]],
             method: str = 'linear',
-    ) -> vtk.vtkImageData:
+            return_port: bool = False,
+    ) -> Union[vtk.vtkAlgorithmOutput, vtk.vtkImageData]:
         resample = vtk.vtkImageResample()
-        resample.SetInputData(image)
+        cls.set_input(resample, image, )
         if isinstance(factor, (float, int)):
             factor = (factor, factor, factor)
         fx, fy, fz = factor
@@ -198,7 +278,24 @@ class VTKUtils:
         else:
             raise ValueError(f'Invalid interpolation method: {method}')
         resample.Update()
+        if return_port:
+            return resample.GetOutputPort()
         return resample.GetOutput()
+
+    @classmethod
+    def clip(
+            cls,
+            image: Union[vtk.vtkImageData, vtk.vtkAlgorithmOutput],
+            voi: Tuple[int, int, int, int, int, int],
+            return_port: bool = False
+    ) -> Union[vtk.vtkAlgorithmOutput, vtk.vtkImageData]:
+        clip = vtk.vtkImageClip()
+        cls.set_input(clip, image,)
+        clip.SetVOI(*voi)
+        clip.Update()
+        if return_port:
+            return clip.GetOutputPort()
+        return clip.GetOutput()
 
     @staticmethod
     def np_image_to_vtk(
@@ -226,9 +323,46 @@ class VTKUtils:
         vtk_image.GetPointData().SetScalars(vtk_array)
         return vtk_image
 
+    @staticmethod
+    def vtk_image_to_np(
+            image: vtk.vtkImageData
+    ) -> Tuple[npt.NDArray, npt.NDArray[np.float64]]:
+        dims = image.GetDimensions()  # (X, Y, Z)
+        n_components = image.GetNumberOfScalarComponents()
+
+        vtk_array = image.GetPointData().GetScalars()
+        np_array = vtknp.vtk_to_numpy(vtk_array)
+
+        # Reshape to (Z, Y, X, C)
+        if n_components > 1:
+            np_array = np_array.reshape(dims[2], dims[1], dims[0], n_components)
+        else:
+            np_array = np_array.reshape(dims[2], dims[1], dims[0])
+
+        spacing = image.GetSpacing()
+        spacing = np.array([spacing[2], spacing[1], spacing[0]], dtype=np.float64)
+        return np_array, spacing
+
+    @staticmethod
+    def set_input(
+            algorithm: SupportsImageInput,
+            input: Union[vtk.vtkImageData, vtk.vtkAlgorithmOutput]
+    ):
+        if isinstance(input, vtk.vtkImageData):
+            algorithm.SetInputData(input)
+        elif isinstance(input, vtk.vtkAlgorithmOutput):
+            algorithm.SetInputConnection(input)
+        else:
+            raise TypeError(f'Invalid input type: {type(input)}')
+        return algorithm
 
 
 new_renderer_window = VTKUtils.new_renderer_window
-np_image_to_vtk = VTKUtils.np_image_to_vtk
-resample = VTKUtils.resample
 build_volume = VTKUtils.build_volume
+position_view_camera = VTKUtils.position_view_camera
+capture_window_as_numpy = VTKUtils.capture_window_as_numpy
+resample = VTKUtils.resample
+clip = VTKUtils.clip
+np_image_to_vtk = VTKUtils.np_image_to_vtk
+vtk_image_to_np = VTKUtils.vtk_image_to_np
+
