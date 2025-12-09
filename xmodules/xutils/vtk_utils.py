@@ -149,14 +149,14 @@ class VTKUtils:
             image: Union[vtk.vtkImageData, vtk.vtkAlgorithmOutput],
             color: Optional[vtk.vtkColorTransferFunction] = None,
             scalar_opacity: Optional[vtk.vtkPiecewiseFunction] = None,
-            interpolation: str = 'linear',
+            interpolation=None,
             shade=None,
             specular=None,
             specular_power=None,
             ambient=None,
             diffuse=None,
             scalar_opacity_unit_distance=None,
-            blend_mode_to_composite=None,
+            blend_mode=None,
             device='cpu'
     ):
         prop = vtk.vtkVolumeProperty()
@@ -164,12 +164,13 @@ class VTKUtils:
             prop.SetColor(color)
         if scalar_opacity is not None:
             prop.SetScalarOpacity(scalar_opacity)
-        if interpolation == 'linear':
-            prop.SetInterpolationTypeToLinear()
-        elif interpolation == 'nearest':
-            prop.SetInterpolationTypeToNearest()
-        else:
-            raise ValueError(f'Invalid interpolation method: {interpolation}')
+        if interpolation is not None:
+            if interpolation == 'linear':
+                prop.SetInterpolationTypeToLinear()
+            elif interpolation == 'nearest':
+                prop.SetInterpolationTypeToNearest()
+            else:
+                raise ValueError(f'Invalid interpolation method: {interpolation}')
         if shade is not None:
             prop.ShadeOn() if shade else prop.ShadeOff()
         if specular is not None:
@@ -182,15 +183,30 @@ class VTKUtils:
             prop.SetDiffuse(diffuse)
         if scalar_opacity_unit_distance is not None:
             prop.SetScalarOpacityUnitDistance(scalar_opacity_unit_distance)
+
+        mapper: vtk.vtkVolumeMapper = vtk.vtkSmartVolumeMapper()
         if device == 'cpu':
-            mapper = vtk.vtkFixedPointVolumeRayCastMapper()
+            mapper.SetRequestedRenderModeToRayCast()
         elif device == 'cuda':
-            mapper = vtk.vtkGPUVolumeRayCastMapper()
+            mapper.SetRequestedRenderModeToGPU()
         else:
             raise ValueError(f'Device {device} is not supported.')
+        if blend_mode is not None:
+            if blend_mode == 'composite':
+                mapper.SetBlendModeToComposite()
+            elif blend_mode == 'average_intensity':
+                mapper.SetBlendModeToAverageIntensity()
+            else:
+                raise ValueError(f'Invalid blend mode: {blend_mode}')
+        if interpolation is not None:
+            if interpolation == 'linear':
+                mapper.SetInterpolationModeToLinear()
+            elif interpolation == 'nearest':
+                mapper.SetInterpolationModeToNearestNeighbor()
+            else:
+                raise ValueError(f'Invalid interpolation method: {interpolation}')
         cls.set_input(mapper, image)
-        if blend_mode_to_composite is not None and blend_mode_to_composite:
-            mapper.SetBlendModeToComposite()
+
         volume = vtk.vtkVolume()
         volume.SetMapper(mapper)
         volume.SetProperty(prop)
