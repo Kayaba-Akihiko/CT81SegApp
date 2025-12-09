@@ -25,6 +25,13 @@ NUMPY_VTK_DTYPE_MAP = {
     np.int64: vtk.VTK_LONG,
     np.float32: vtk.VTK_FLOAT,
     np.float64: vtk.VTK_DOUBLE,
+    np.dtype(np.uint8): vtk.VTK_UNSIGNED_CHAR,
+    np.dtype(np.uint16): vtk.VTK_UNSIGNED_SHORT,
+    np.dtype(np.int16): vtk.VTK_SHORT,
+    np.dtype(np.int32): vtk.VTK_INT,
+    np.dtype(np.int64): vtk.VTK_LONG,
+    np.dtype(np.float32): vtk.VTK_FLOAT,
+    np.dtype(np.float64): vtk.VTK_DOUBLE,
 }
 
 class SupportsImageInput(Protocol):
@@ -73,7 +80,6 @@ class VTKUtils:
             view: Union[TypeView, List[TypeView]],
             view_camera_position: Union[Tuple[float, float, float], List[Tuple[float, float, float]]],
             view_camera_offset: Union[float, List[float]] = 2500.0,
-            view_camera_zoom: Union[float, List[float]] = 1.6,
             out_size: Optional[Union[Tuple[int, int], List[Tuple[int, int]]]] = None,
     ):
         if isinstance(view, str):
@@ -100,10 +106,6 @@ class VTKUtils:
         if len(view_camera_offset) != n_views:
             raise ValueError(f"Invalid view_camera_offset: {view_camera_offset}")
 
-        if not isinstance(view_camera_zoom, (list, tuple)):
-            view_camera_zoom = [view_camera_zoom] * len(view)
-        if len(view_camera_zoom) != len(view):
-            raise ValueError(f"Invalid view_camera_zoom: {view_camera_zoom}")
 
         if out_size is not None:
             prev_size = win.GetSize()
@@ -120,8 +122,8 @@ class VTKUtils:
             out_size = [None] * len(view)
 
         results = []
-        for view_i, camera_center_i, camera_offset_i, camera_zoom_i, out_size_i in zip(
-                view, view_camera_position, view_camera_offset, view_camera_zoom, out_size):
+        for view_i, camera_center_i, camera_offset_i, out_size_i in zip(
+                view, view_camera_position, view_camera_offset, out_size):
             view_i: TypeView
             camera_center_i: Tuple[float, float, float]
             if out_size_i is not None:

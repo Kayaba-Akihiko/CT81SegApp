@@ -80,7 +80,6 @@ class LabelmapRenderer:
             color_table: Dict[int, Tuple[float, float, float, float]],
             voi: Optional[Tuple[int, int, int, int, int, int]] = None,
             camera_offset: Union[float, List[float]] = 2500.0,
-            camera_zoom: Union[float, List[float]] = 1.6,
             out_size: Optional[Union[Tuple[int, int], List[Tuple[int, int]]]] = None,
             device='cpu'
     ):
@@ -120,7 +119,6 @@ class LabelmapRenderer:
             view=view,
             view_camera_position=image.GetCenter(),
             view_camera_offset=camera_offset,
-            view_camera_zoom=camera_zoom,
             out_size=out_size,
         )
         ren.Clear()
