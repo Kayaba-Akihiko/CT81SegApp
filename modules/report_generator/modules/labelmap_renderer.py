@@ -6,7 +6,6 @@
 #  without the express permission of Yi GU.
 
 from typing import Tuple, Optional, Union, Dict, Any, Sequence, List
-import copy
 import logging
 
 import numpy as np
@@ -83,8 +82,8 @@ class LabelmapRenderer:
             camera_offset: Union[float, List[float]] = 2500.0,
             camera_zoom: Union[float, List[float]] = 1.6,
             out_size: Optional[Union[Tuple[int, int], List[Tuple[int, int]]]] = None,
+            device='cpu'
     ):
-
 
         voi = self._ensure_extent_min_thickness(voi, 3)
         if voi:
@@ -108,9 +107,23 @@ class LabelmapRenderer:
             image=image,
             color=color,
             scalar_opacity=scalar_opacity,
+            device=device,
         )
 
         ren, win = self._renderer, self._window
+        ren.Clear()
         ren.RemoveAllViewProps()
         ren.AddVolume(volume)
+        res = vtk_utils.render_view_as_np_image(
+            ren=ren,
+            win=win,
+            view=view,
+            view_camera_position=image.GetCenter(),
+            view_camera_offset=camera_offset,
+            view_camera_zoom=camera_zoom,
+            out_size=out_size,
+        )
+        ren.Clear()
+        ren.RemoveAllViewProps()
+        return res
 

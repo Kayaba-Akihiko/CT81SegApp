@@ -71,7 +71,7 @@ class VTKUtils:
             ren: vtk.vtkRenderer,
             win: vtk.vtkRenderWindow,
             view: Union[TypeView, List[TypeView]],
-            view_camera_center: Union[Tuple[float, float, float], List[Tuple[float, float, float]]],
+            view_camera_position: Union[Tuple[float, float, float], List[Tuple[float, float, float]]],
             view_camera_offset: Union[float, List[float]] = 2500.0,
             view_camera_zoom: Union[float, List[float]] = 1.6,
             out_size: Optional[Union[Tuple[int, int], List[Tuple[int, int]]]] = None,
@@ -86,14 +86,14 @@ class VTKUtils:
         if (n_views :=len(view)) == 0:
             raise ValueError("Empty view list.")
 
-        if not isinstance(view_camera_center, (list, tuple)):
-            raise ValueError(f"Invalid view_camera_center: {view_camera_center}")
-        if len(view_camera_center) == 0:
+        if not isinstance(view_camera_position, (list, tuple)):
+            raise ValueError(f"Invalid view_camera_center: {view_camera_position}")
+        if len(view_camera_position) == 0:
             raise ValueError("Empty view_camera_center list.")
-        if not isinstance(view_camera_center[0], (list, tuple)):
-            view_camera_center = [view_camera_center] * n_views
-        if len(view_camera_center) != n_views:
-            raise ValueError(f"Invalid view_camera_center: {view_camera_center}")
+        if not isinstance(view_camera_position[0], (list, tuple)):
+            view_camera_position = [view_camera_position] * n_views
+        if len(view_camera_position) != n_views:
+            raise ValueError(f"Invalid view_camera_center: {view_camera_position}")
 
         if not isinstance(view_camera_offset, (list, tuple)):
             view_camera_offset = [view_camera_offset] * n_views
@@ -106,6 +106,7 @@ class VTKUtils:
             raise ValueError(f"Invalid view_camera_zoom: {view_camera_zoom}")
 
         if out_size is not None:
+            prev_size = win.GetSize()
             if isinstance(out_size, (list, tuple)):
                 if len(out_size) == 0:
                     raise ValueError("Empty out_size list.")
@@ -115,29 +116,30 @@ class VTKUtils:
                 else:
                     out_size = [out_size] * len(view)
         else:
+            prev_size = None
             out_size = [None] * len(view)
 
         results = []
         for view_i, camera_center_i, camera_offset_i, camera_zoom_i, out_size_i in zip(
-                view, view_camera_center, view_camera_offset, view_camera_zoom, out_size):
+                view, view_camera_position, view_camera_offset, view_camera_zoom, out_size):
             view_i: TypeView
             camera_center_i: Tuple[float, float, float]
             if out_size_i is not None:
                 win.SetSize(*out_size_i)
             cls.position_view_camera(
-                ren=ren, view=view_i,
-                center=camera_center_i, cam_offset=camera_offset_i)
+                cam=ren.GetActiveCamera(), view=view_i,
+                position=camera_center_i, cam_offset=camera_offset_i)
             ren.ResetCameraClippingRange()
             win.Render()
             rendered_image = cls.capture_window_as_numpy(win)
             results.append(rendered_image)
+        if prev_size is not None:
+             win.SetSize(*prev_size)
         if len(results) == 0:
             raise RuntimeError("No rendered image.")
         if len(results) == 1:
             return results[0]
         return results
-
-
 
     @classmethod
     def build_volume(
@@ -194,16 +196,15 @@ class VTKUtils:
 
     @staticmethod
     def position_view_camera(
-            ren: vtk.vtkRenderer,
+            cam: vtk.vtkCamera,
             view: TypeView,
-            center: Tuple[float, float, float],
+            position: Tuple[float, float, float],
             cam_offset: Union[float, int] = 0,
     ) -> vtk.vtkCamera:
-        cam = ren.GetActiveCamera()
 
         # focal point always looks at the volume center
-        cam.SetFocalPoint(*center)
-        cx, cy, cz = center
+        cam.SetFocalPoint(*position)
+        cx, cy, cz = position
         if view == 'front':  # looking from -Y toward +Y
             cam.SetPosition(cx, cy - cam_offset, cz)
             cam.SetViewUp(0, 0, 1)
@@ -224,7 +225,6 @@ class VTKUtils:
             cam.SetViewUp(0, 1, 0)
         else:
             raise ValueError(f"Unknown view '{view}'")
-
         cam.Modified()
         return cam
 
@@ -359,6 +359,7 @@ class VTKUtils:
 
 new_renderer_window = VTKUtils.new_renderer_window
 build_volume = VTKUtils.build_volume
+render_view_as_np_image = VTKUtils.render_view_as_np_image
 position_view_camera = VTKUtils.position_view_camera
 capture_window_as_numpy = VTKUtils.capture_window_as_numpy
 resample = VTKUtils.resample
