@@ -36,7 +36,7 @@ def main():
         labelmap, spacing, config, output_dir / 'cpu', device='cpu'
     )
     preview_labelmap(
-        labelmap, spacing, config, output_dir / 'gpu', device='gpu'
+        labelmap, spacing, config, output_dir / 'cuda', device='cuda'
     )
     return
     vtk_labelmap = vtk_utils.np_image_to_vtk(
