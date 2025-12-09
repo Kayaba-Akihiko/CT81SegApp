@@ -375,7 +375,7 @@ def preview_labelmap(
         for class_name, (class_id, r, g, b, a) in rendering_config['color'].items():
             color.AddRGBPoint(class_id, r, g, b)
             scalar_opacity.AddPoint(class_id, a)
-    del rendering_config['color']
+        del rendering_config['color']
 
     # The opacity transfer function is used to control the opacity
     # of different tissue types.
