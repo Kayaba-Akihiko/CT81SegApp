@@ -33,7 +33,10 @@ def main():
     labelmap, spacing, _ = metaimage_utils.read(labelmap_path)
 
     preview_labelmap(
-        labelmap, spacing, config, output_dir
+        labelmap, spacing, config, output_dir / 'cpu', device='cpu'
+    )
+    preview_labelmap(
+        labelmap, spacing, config, output_dir / 'gpu', device='gpu'
     )
     return
     vtk_labelmap = vtk_utils.np_image_to_vtk(
@@ -92,7 +95,7 @@ def preview_labelmap(
 ):
     import vtk
     from vtkmodules.util import numpy_support as vtknp
-
+    output_dir.mkdir(exist_ok=True, parents=True)
 
     colors = vtk.vtkNamedColors()
     colors.SetColor("BkgColor", [255, 255, 255, 255])
@@ -222,10 +225,13 @@ def preview_labelmap(
     vtk_array.SetName("labelmap")
     image.GetPointData().SetScalars(vtk_array)
 
+    mapper = vtk.vtkSmartVolumeMapper()
     if device == 'cpu':
-        mapper = vtk.vtkFixedPointVolumeRayCastMapper()
+        mapper.SetRequestedRenderModeToRayCast()
+        # mapper = vtk.vtkFixedPointVolumeRayCastMapper()
     elif device == 'cuda':
-        mapper = vtk.vtkGPUVolumeRayCastMapper()
+        mapper.SetRequestedRenderModeToGPU()
+        # mapper = vtk.vtkGPUVolumeRayCastMapper()
     else:
         raise ValueError(f'Device {device} is not supported.')
 
@@ -239,6 +245,7 @@ def preview_labelmap(
     # print('vtkGPUVolumeRayCastMapper::GetScalarModeAsString: {}'.format(mapper.GetScalarModeAsString()))
     mapper.SetBlendModeToComposite()
     # mapper.SetBlendModeToAverageIntensity()
+    mapper.SetInterpolationModeToNearestNeighbor()
 
     # The vtkVolume is a vtkProp3D (like a vtkActor) and controls the position
     # and orientation of the volume in world coordinates.
