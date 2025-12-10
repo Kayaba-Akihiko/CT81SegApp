@@ -18,13 +18,12 @@ import imageio.v3 as iio
 
 @dataclass
 class BoxDrawingData:
-    name: str
-    target: float
-    mean: float
-    std: float
-    visible: bool
-    color: Tuple[float, float, float]
-
+    name: Optional[float] = None
+    target: Optional[float] = None
+    mean: Optional[float] = None
+    std: Optional[float] = None
+    color: Optional[Tuple[float, float, float]] = None
+    visible: bool = True
 
 class FigureUtils:
 
@@ -92,70 +91,80 @@ class FigureUtils:
             box_h = 0.7
             y_centers = None
 
+        def _is_valid_val(val):
+            if val is None:
+                return False
+            if np.isnan(val):
+                return False
+            if np.isinf(val):
+                return False
+            return True
+
         for i, box_data in enumerate(boxes):
             if not box_data.visible:
                 continue
             color = box_data.color
             target = box_data.target
             mean, std = box_data.mean, box_data.std
-            if np.isinf(target) or np.isnan(target):
-                raise ValueError(
-                    f'Target value must be finite, got {target}.')
-            if np.isinf(mean) or np.isnan(mean):
-                raise ValueError(
-                    f'Mean value must be finite, got {box_data.mean}.')
-            if np.isinf(std) or np.isnan(std):
-                raise ValueError(
-                    f'Standard deviation must be finite, got {box_data.std}.')
-            if std <= 0.0:
-                raise ValueError(
-                    f'Standard deviation must be greater than 0, got {box_data.std}.')
-            x0 = mean - std
-            width = 2 * mean
 
-            if pixel_mode:
-                y_c = y_centers[i]
-                y0 = int(y_c - box_h // 2)
-                rect = Rectangle(
-                    (x0, y0), width, int(box_h),
-                    facecolor=color,
-                    edgecolor='black', linewidth=0.1, antialiased=False)
+            draw_box = True
+            draw_star = True
 
-                ax.add_patch(rect)
-                half = int(round(box_h * 0.48))
-                ax.plot(
-                    [mean, mean],
-                    [y_c - half, y_c + half],
-                    color='black',
-                    linewidth=1.2, antialiased=False)
-            else:
-                rect = Rectangle(
-                    (x0, y_pos[i] - 0.35),
-                    width, 0.7,
-                    facecolor=color,
-                    edgecolor='black',
-                    alpha=0.8, linewidth=0.1)
+            if not _is_valid_val(mean) or not _is_valid_val(std):
+                draw_box = False
+            if _is_valid_val(std) and std <= 0.0:
+                draw_box = False
 
-                ax.add_patch(rect)
-                ax.plot(
-                    [mean, mean],
-                    [y_pos[i] - 0.38, y_pos[i] + 0.38],
-                    color='black',
-                    linewidth=1.2)
+            if _is_valid_val(target):
+                draw_star = False
 
-            if pixel_mode:
-                y_c = y_centers[i]
-                ax.scatter(
-                    [target], [y_c],
-                    marker='*', s=s_star,
-                    facecolor='black', edgecolors='white',
-                    linewidths=0.7, zorder=5, clip_on=False)
-            else:
-                ax.scatter(
-                    [target], [y_pos[i]],
-                    marker='*', s=s_star,
-                    facecolor='black', edgecolors='white',
-                    linewidths=0.7, zorder=5)
+            if draw_box:
+                x0 = mean - std
+                width = 2 * mean
+                if pixel_mode:
+                    y_c = y_centers[i]
+                    y0 = int(y_c - box_h // 2)
+                    rect = Rectangle(
+                        (x0, y0), width, int(box_h),
+                        facecolor=color,
+                        edgecolor='black', linewidth=0.1, antialiased=False)
+
+                    ax.add_patch(rect)
+                    half = int(round(box_h * 0.48))
+                    ax.plot(
+                        [mean, mean],
+                        [y_c - half, y_c + half],
+                        color='black',
+                        linewidth=1.2, antialiased=False)
+                else:
+                    rect = Rectangle(
+                        (x0, y_pos[i] - 0.35),
+                        width, 0.7,
+                        facecolor=color,
+                        edgecolor='black',
+                        alpha=0.8, linewidth=0.1)
+
+                    ax.add_patch(rect)
+                    ax.plot(
+                        [mean, mean],
+                        [y_pos[i] - 0.38, y_pos[i] + 0.38],
+                        color='black',
+                        linewidth=1.2)
+
+            if draw_star:
+                if pixel_mode:
+                    y_c = y_centers[i]
+                    ax.scatter(
+                        [target], [y_c],
+                        marker='*', s=s_star,
+                        facecolor='black', edgecolors='white',
+                        linewidths=0.7, zorder=5, clip_on=False)
+                else:
+                    ax.scatter(
+                        [target], [y_pos[i]],
+                        marker='*', s=s_star,
+                        facecolor='black', edgecolors='white',
+                        linewidths=0.7, zorder=5)
 
         for i, box_data in enumerate(boxes):
             if box_data.visible:
@@ -187,3 +196,12 @@ class FigureUtils:
                 buf, dpi=160, bbox_inches='tight')
         plt.close(fig)
         return iio.imread(buf)
+
+    @staticmethod
+    def star_size_points2_from_box_height(
+            box_h_px: int, dpi: int, scale: float = 0.5) -> float:
+        h_pt = box_h_px * 72.0 / dpi
+        return (h_pt * scale) ** 2
+
+draw_hu_boxes = FigureUtils.draw_hu_boxes
+star_size_points2_from_box_height = FigureUtils.star_size_points2_from_box_height
