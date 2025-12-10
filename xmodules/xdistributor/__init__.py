@@ -21,9 +21,8 @@ def get_distributor(
         precision: TypePrecision = '32-true',
         strategy: TypeStrategy = 'auto',
 ) -> DistributorProtocol:
-    if isinstance(devices, str):
-        if devices != 'auto':
-            devices = int(devices)
+    if isinstance(devices, str) and devices != 'auto':
+        devices = int(devices)
     elif isinstance(devices, int):
         pass
     else:
@@ -41,7 +40,7 @@ def get_distributor(
             strategy=strategy,
         )
     if backend == 'fabric':
-        if not lib_utils.import_available('Fabric', 'lightning'):
+        if not lib_utils.import_available('lightning.Fabric'):
             raise RuntimeError(
                 'Failed to import lightning.Fabric. '
                 'Please install lightning with fabric support.'
