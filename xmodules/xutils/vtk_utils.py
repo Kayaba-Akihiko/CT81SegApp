@@ -51,7 +51,7 @@ class VTKUtils:
             use_depth_peeling_for_volumes: Optional[bool] = None,
             maximum_number_of_peels: Optional[int] = None,
             occlusion_ratio: Optional[float] = None,
-    ):
+    ) -> Tuple[vtk.vtkRenderer, vtk.vtkRenderWindow]:
         ren = vtk.vtkRenderer()
         ren.SetBackground(*background)
         renWin = vtk.vtkRenderWindow()
@@ -81,7 +81,7 @@ class VTKUtils:
             view_camera_position: Union[Tuple[float, float, float], List[Tuple[float, float, float]]],
             view_camera_offset: Union[float, List[float]] = 2500.0,
             out_size: Optional[Union[Tuple[int, int], List[Tuple[int, int]]]] = None,
-    ):
+    ) -> Union[npt.NDArray[np.uint8], List[npt.NDArray[np.uint8]]]:
         if isinstance(view, str):
             view = [view]
         elif isinstance(view, (list, tuple)):
@@ -158,7 +158,7 @@ class VTKUtils:
             scalar_opacity_unit_distance=None,
             blend_mode=None,
             device='cpu'
-    ):
+    ) -> vtk.vtkVolume:
         prop = vtk.vtkVolumeProperty()
         if color is not None:
             prop.SetColor(color)
@@ -365,7 +365,7 @@ class VTKUtils:
     def set_input(
             algorithm: SupportsImageInput,
             input: Union[vtk.vtkImageData, vtk.vtkAlgorithmOutput]
-    ):
+    ) -> SupportsImageInput:
         if isinstance(input, vtk.vtkImageData):
             algorithm.SetInputData(input)
         elif isinstance(input, vtk.vtkAlgorithmOutput):

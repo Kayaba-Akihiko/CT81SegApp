@@ -7,7 +7,7 @@
 
 
 from pathlib import Path
-from typing import Union, Dict, TypeAlias, Literal, Optional
+from typing import Union, Dict, TypeAlias, Literal, Optional, Tuple, Self
 import io
 
 import numpy as np
@@ -47,9 +47,31 @@ class ReportPPT:
             raise ValueError(f'Invalid fit mode: {fit_mode}')
         self.fit_mode = fit_mode
         if isinstance(template, PPTXPresentation):
-            self.presentation = template
+            self.presentation = self.clone_presentation(template)
         else:
             self.presentation = create_presentation(str(template))
+
+    def copy(self) -> Self:
+        return ReportPPT(self.presentation, fit_mode=self.fit_mode)
+
+    def collect_shape_sizes(
+            self, dpi: int = 96
+    ) -> Dict[str, Tuple[int, int]]:
+        sizes: Dict[str, Tuple[int, int]] = {}
+        for slide in self.presentation.slides:
+            for shape in self._iter_shapes(slide.shapes):
+                name = getattr(shape, 'name', '') or ''
+                if 'IMG:' not in name:
+                    continue
+
+                key = name.split('IMG:', 1)[1].strip()
+                if not key:
+                    continue
+                w_px = self._emu_to_px(shape.width, dpi)
+                h_px = self._emu_to_px(shape.height, dpi)
+                sizes[key] = (w_px, h_px)
+
+        return sizes
 
     @classmethod
     def _iter_shapes(cls, shapes: PPTXSlideShapes):
@@ -103,6 +125,18 @@ class ReportPPT:
         pic.left, pic.top = x, y
         return pic
 
+    @staticmethod
+    def clone_presentation(presentation: PPTXPresentation) -> PPTXPresentation:
+        buffer = io.BytesIO()
+        presentation.save(buffer)
+        buffer.seek(0)
+        return create_presentation(buffer)
+
+
+    @staticmethod
+    def _emu_to_px(emu: int, dpi: int = 96) -> int:
+        # EMU_PER_INCH = 914400
+        return int(round(emu / 914400 * dpi))
 
     @staticmethod
     def _stream_image(
