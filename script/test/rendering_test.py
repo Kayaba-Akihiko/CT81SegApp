@@ -32,13 +32,13 @@ def main():
 
     labelmap, spacing, _ = metaimage_utils.read(labelmap_path)
 
-    preview_labelmap(
-        labelmap, spacing, config, output_dir / 'cpu', device='cpu'
-    )
-    preview_labelmap(
-        labelmap, spacing, config, output_dir / 'cuda', device='cuda'
-    )
-    return
+    # preview_labelmap(
+    #     labelmap, spacing, config, output_dir / 'cpu', device='cpu'
+    # )
+    # preview_labelmap(
+    #     labelmap, spacing, config, output_dir / 'cuda', device='cuda'
+    # )
+    # return
     vtk_labelmap = vtk_utils.np_image_to_vtk(
         labelmap, spacing, name='labelmap')
 
@@ -63,8 +63,8 @@ def main():
         ambient=config['ambient'],
         diffuse=config['diffuse'],
         shade=config['shade'],
-        blend_mode_to_composite=True,
-        device='cpu',
+        blend_mode='composite',
+        device='cuda',
     )
 
     camera_offset = 2400

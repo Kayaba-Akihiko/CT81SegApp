@@ -39,7 +39,8 @@ class LabelmapRenderer:
             labelmap, spacing, name='labelmap')
         factor = self._compute_uniform_scale(vtk_labelmap, voxel_limit)
         vtk_labelmap = vtk_utils.resample(
-            vtk_labelmap, factor, method='nearest')
+            vtk_labelmap, factor, method='nearest', return_port=False)
+        assert isinstance(vtk_labelmap, vtk.vtkImageData)
         self._vtk_labelmap = vtk_labelmap
 
         self._renderer, self._window = vtk_utils.new_renderer_window(
@@ -53,46 +54,35 @@ class LabelmapRenderer:
             occlusion_ratio=occlusion_ratio,
         )
 
-    @staticmethod
-    def _compute_uniform_scale(
-            image: vtk.vtkImageData, limit: float) -> float:
-        x0, x1, y0, y1, z0, z1 = image.GetExtent()
-        dims = (x1 - x0 + 1, y1 - y0 + 1, z1 - z0 + 1)
-        return min(1.0, limit / dims[0], limit / dims[1], limit / dims[2])
-
-    @staticmethod
-    def _ensure_extent_min_thickness(
-            extent: Tuple[int, int, int, int, int, int],
-            min_thick: int = 3
-    ) -> Tuple[int, int, int, int, int, int]:
-        x0, x1, y0, y1, z0, z1 = extent
-        if (z1 - z0 + 1) < min_thick:
-            mid = (z0 + z1) // 2
-            half = max(1, min_thick // 2)
-            z0 = mid - half
-            z1 = z0 + min_thick - 1
-
-        return x0, x1, y0, y1, z0, z1
-
     def render(
             self,
             view: Union[vtk_utils.TypeView, List[vtk_utils.TypeView]],
-            color_table: Dict[int, Tuple[float, float, float, float]],
-            voi: Optional[Tuple[int, int, int, int, int, int]] = None,
+            class_color_table: Dict[int, Tuple[float, float, float, float]],
+            bound_z_class_ids: Optional[Sequence[int]] = None,
             camera_offset: Union[float, List[float]] = 2500.0,
+            shade=None,
+            specular=None,
+            specular_power=None,
+            ambient=None,
+            diffuse=None,
+            scalar_opacity_unit_distance=None,
+            blend_mode=None,
             out_size: Optional[Union[Tuple[int, int], List[Tuple[int, int]]]] = None,
             device='cpu'
     ):
 
         image = self._vtk_labelmap
-        if voi is not None:
-            voi = self._ensure_extent_min_thickness(voi, 3)
+
+        if bound_z_class_ids is not None:
+            x0, x1, y0, y1, z0, z1 = image.GetExtent()
+            z0, z1 = self._compute_labelmap_z_extent(image, bound_z_class_ids)
             image = vtk_utils.clip(
-                image=image, voi=voi, return_port=False)
+                image=image, extent=(x0, x1, y0, y1, z0, z1), return_port=False)
+            del x0, x1, y0, y1, z0, z1
 
         color = vtk.vtkColorTransferFunction()
         scalar_opacity = vtk.vtkPiecewiseFunction()
-        for class_id, (r, g, b, a) in color_table.items():
+        for class_id, (r, g, b, a) in class_color_table.items():
             color.AddRGBPoint(class_id, r, g, b)
             scalar_opacity.AddPoint(class_id, a)
 
@@ -107,6 +97,14 @@ class LabelmapRenderer:
             image=image,
             color=color,
             scalar_opacity=scalar_opacity,
+            interpolation='nearest',
+            shade=shade,
+            specular=specular,
+            specular_power=specular_power,
+            ambient=ambient,
+            diffuse=diffuse,
+            scalar_opacity_unit_distance=scalar_opacity_unit_distance,
+            blend_mode=blend_mode,
             device=device,
         )
 
@@ -204,3 +202,25 @@ class LabelmapRenderer:
             zmin, zmax = zmax, zmin
 
         return zmin, zmax
+
+
+    @staticmethod
+    def _compute_uniform_scale(
+            image: vtk.vtkImageData, limit: float) -> float:
+        x0, x1, y0, y1, z0, z1 = image.GetExtent()
+        dims = (x1 - x0 + 1, y1 - y0 + 1, z1 - z0 + 1)
+        return min(1.0, limit / dims[0], limit / dims[1], limit / dims[2])
+
+    @staticmethod
+    def _ensure_extent_min_thickness(
+            extent: Tuple[int, int, int, int, int, int],
+            min_thick: int = 3
+    ) -> Tuple[int, int, int, int, int, int]:
+        x0, x1, y0, y1, z0, z1 = extent
+        if (z1 - z0 + 1) < min_thick:
+            mid = (z0 + z1) // 2
+            half = max(1, min_thick // 2)
+            z0 = mid - half
+            z1 = z0 + min_thick - 1
+
+        return x0, x1, y0, y1, z0, z1

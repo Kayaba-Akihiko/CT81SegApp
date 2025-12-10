@@ -304,16 +304,17 @@ class VTKUtils:
     def clip(
             cls,
             image: Union[vtk.vtkImageData, vtk.vtkAlgorithmOutput],
-            voi: Tuple[int, int, int, int, int, int],
+            extent: Tuple[int, int, int, int, int, int],
             return_port: bool = False
     ) -> Union[vtk.vtkAlgorithmOutput, vtk.vtkImageData]:
-        clip = vtk.vtkImageClip()
-        cls.set_input(clip, image,)
-        clip.SetVOI(*voi)
-        clip.Update()
+        image_clip = vtk.vtkImageClip()
+        cls.set_input(image_clip, image,)
+        image_clip.SetOutputWholeExtent(extent)
+        image_clip.ClipDataOn()
+        image_clip.Update()
         if return_port:
-            return clip.GetOutputPort()
-        return clip.GetOutput()
+            return image_clip.GetOutputPort()
+        return image_clip.GetOutput()
 
     @staticmethod
     def np_image_to_vtk(

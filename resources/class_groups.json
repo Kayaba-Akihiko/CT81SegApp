@@ -1,0 +1,142 @@
+[
+    {
+        "group_name": "1",
+        "class_ids": [
+            23,
+            27,
+            29,
+            28
+        ],
+        "class_names": [
+            "rectus_abdominis",
+            "internal_oblique",
+            "external_oblique",
+            "transversus_abdominis"
+        ],
+        "rendering_view": "front"
+    },
+    {
+        "group_name": "2",
+        "class_ids": [
+            3,
+            12,
+            8,
+            16
+        ],
+        "class_names": [
+            "adductor_muscles",
+            "pectineus_muscle",
+            "gracilis_muscle",
+            "sartorius_muscle"
+        ],
+        "rendering_view": "front"
+    },
+    {
+        "group_name": "3",
+        "class_ids": [
+            15,
+            20,
+            21
+        ],
+        "class_names": [
+            "rectus_femoris_muscle",
+            "vastus_lateralis_muscle_and_vastus_intermedius_muscle",
+            "vastus_medialis_muscle"
+        ],
+        "rendering_view": "front"
+    },
+    {
+        "group_name": "4",
+        "class_ids": [
+            76,
+            77
+        ],
+        "class_names": [
+            "anterior_compartment_muscles",
+            "lateral_compartment_muscles"
+        ],
+        "rendering_view": "front"
+    },
+    {
+        "group_name": "5",
+        "class_ids": [
+            14,
+            9,
+            26
+        ],
+        "class_names": [
+            "psoas_major_muscle",
+            "iliacus_muscle",
+            "quadratus_lumborum"
+        ],
+        "rendering_view": "front"
+    },
+    {
+        "group_name": "6",
+        "class_ids": [
+            11,
+            10,
+            13
+        ],
+        "class_names": [
+            "obturator_internus_muscle",
+            "obturator_externus_muscle",
+            "piriformis_muscle"
+        ],
+        "rendering_view": "back"
+    },
+    {
+        "group_name": "7",
+        "class_ids": [
+            25,
+            34
+        ],
+        "class_names": [
+            "erector_spinae",
+            "latissimus_dorsi"
+        ],
+        "rendering_view": "back"
+    },
+    {
+        "group_name": "8",
+        "class_ids": [
+            5,
+            6,
+            7,
+            19
+        ],
+        "class_names": [
+            "gluteus_maximus_muscle",
+            "gluteus_medius_muscle",
+            "gluteus_minimus_muscle",
+            "tensor_fasciae_latae_muscle"
+        ],
+        "rendering_view": "back"
+    },
+    {
+        "group_name": "9",
+        "class_ids": [
+            4,
+            18,
+            17
+        ],
+        "class_names": [
+            "biceps_femoris_muscle",
+            "semitendinosus_muscle",
+            "semimembranosus_muscle"
+        ],
+        "rendering_view": "back"
+    },
+    {
+        "group_name": "10",
+        "class_ids": [
+            79,
+            78
+        ],
+        "class_names": [
+            "superficial_posterior_compartment_muscles",
+            "deep_posterior_compartment_muscles"
+        ],
+        "rendering_view": "back"
+    }
+]

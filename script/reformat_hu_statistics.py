@@ -15,7 +15,7 @@ def main():
     output_dir.mkdir(exist_ok=True, parents=True)
 
     statistics_dfs = pl.read_excel(
-        'resources/mean_std_hu.xlsx',
+        this_dir / '..' /'resources/legacy/mean_std_hu.xlsx',
         sheet_name=['男性_mean', '男性_std', '女性_mean', '女性_std']
     )
     male_mean_df = statistics_dfs['男性_mean'].rename({'__UNNAMED__0': 'age_group'})
@@ -67,8 +67,8 @@ def main():
                 #     raise ValueError(f'{column_name=} {std_val=}')
 
                 final_df_data.append({
-                    'structure': structure_name,
-                    'structure_id': i + 1,
+                    'class_name': structure_name,
+                    'class_id': i + 1,
                     'sex': sex,
                     'age_group_low': age_low,
                     'age_group_high': age_high,
@@ -76,9 +76,9 @@ def main():
                     'std': std_val,
                 })
     final_df = pl.DataFrame(final_df_data)
-    assert len(final_df.unique(['structure_id', 'sex', 'age_group_low'])) == len(final_df)
+    assert len(final_df.unique(['class_id', 'sex', 'age_group_low'])) == len(final_df)
     final_df = final_df.sort(
-        by=['structure_id', 'sex', 'age_group_low'])
+        by=['class_id', 'sex', 'age_group_low'])
     final_df.write_excel(output_dir / 'hu_statistics.xlsx')
 
 
