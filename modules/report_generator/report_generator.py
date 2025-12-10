@@ -213,7 +213,7 @@ class ReportGenerator:
             del box_drawing_data, box_figure
 
         labelmap_renderer = LabelmapRenderer(
-            labelmap=labelmap.astype(np.int16), spacing=spacing,
+            labelmap=labelmap.astype(np.int16, copy=False), spacing=spacing,
             voxel_limit=2048,
             image_size=(1500, 2000),
             alpha_bit_planes=self._rendering_config.get('alpha_bit_planes', None),
