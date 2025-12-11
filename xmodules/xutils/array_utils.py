@@ -211,7 +211,7 @@ class ArrayUtils:
                         and issubclass(dtype, np.generic)
                 )
         ):
-            dtype = np.dtype(dtype)  # Ensure it's a numpy dtype
+            dtype = np.dtype(dtype).type  # Ensure it's a numpy dtype
             if to == 'numpy':
                 conv_map = {dtype: dtype}
             elif to == 'torch':
