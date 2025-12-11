@@ -39,15 +39,15 @@ class OSUtils:
 
     @staticmethod
     def copy(src: TypePathLike, dst: TypePathLike, *, follow_symlinks=True):
-        return shutil.copy(src, dst, follow_symlinks=follow_symlinks)
+        return shutil.copy(str(src), str(dst), follow_symlinks=follow_symlinks)
 
     @staticmethod
     def copyfile(src: TypePathLike, dst: TypePathLike, *, follow_symlinks=True):
-        return shutil.copyfile(src, dst, follow_symlinks=follow_symlinks)
+        return shutil.copyfile(str(src), str(dst), follow_symlinks=follow_symlinks)
 
     @staticmethod
     def copy2(src: TypePathLike, dst: TypePathLike, *, follow_symlinks=True):
-        return shutil.copy2(src, dst, follow_symlinks=follow_symlinks)
+        return shutil.copy2(str(src), str(dst), follow_symlinks=follow_symlinks)
 
     @classmethod
     def format_path_string(
@@ -86,14 +86,14 @@ class OSUtils:
 
     @staticmethod
     def _scan_dirs(
-            paths: TypePathLike | list[TypePathLike] | tuple[TypePathLike, ...],
+            path: TypePathLike | List[TypePathLike] | Tuple[TypePathLike, ...],
             allow_fun: Callable[[os.DirEntry], bool],
             name_regex: Optional[Union[str, re.Pattern]] = None,
             recursive: bool = False,
             follow_symlinks=False,
     ) -> Iterable[os.DirEntry]:
-        if not isinstance(paths, list) and not isinstance(paths, tuple):
-            paths = [paths]
+        if not isinstance(path, list) and not isinstance(path, tuple):
+            path = [path]
         if name_regex is None:
             name_regex = re.compile(".*")
         elif isinstance(name_regex, str):
@@ -118,17 +118,16 @@ class OSUtils:
                     if recursive and entry.is_dir(follow_symlinks=follow_symlinks):
                         yield from _walk_dir(entry.path)
 
-        for path in paths:
+        for p in path:
             yield from _walk_dir(path)
 
     @classmethod
     def scan_dirs_for_file(
             cls,
-            paths: Union[
+            path: Union[
                 TypePathLike,
                 List[TypePathLike],
                 Tuple[TypePathLike, ...],
-                Sequence[TypePathLike]
             ],
             name_regex: Optional[Union[str, re.Pattern]] = None,
             recursive: bool = False,
@@ -138,7 +137,7 @@ class OSUtils:
             return entry.is_file()
 
         return cls._scan_dirs(
-            paths=paths,
+            path=path,
             allow_fun=allow_file,
             name_regex=name_regex,
             recursive=recursive,
@@ -148,9 +147,10 @@ class OSUtils:
     @classmethod
     def scan_dirs_for_folder(
             cls,
-            paths: Union[
-                Union[TypePathLike, List[TypePathLike]],
-                Tuple[TypePathLike, ...]
+            path: Union[
+                TypePathLike,
+                List[TypePathLike],
+                Tuple[TypePathLike, ...],
             ],
             name_regex: Optional[Union[str, re.Pattern]] = None,
             recursive: bool = False,
@@ -160,7 +160,7 @@ class OSUtils:
             return entry.is_dir()
 
         return cls._scan_dirs(
-            paths=paths,
+            path=path,
             allow_fun=allow_dir,
             name_regex=name_regex,
             recursive=recursive,
