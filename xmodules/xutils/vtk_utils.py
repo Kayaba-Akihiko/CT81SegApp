@@ -316,6 +316,39 @@ class VTKUtils:
             return image_clip.GetOutputPort()
         return image_clip.GetOutput()
 
+    @classmethod
+    def build_labelmap_color(
+            cls,
+            color_table: Dict[
+                int,
+                Tuple[
+                    Union[int, float],
+                    Union[int, float],
+                    Union[int, float],
+                    Union[int, float],
+                ]
+            ]
+    ) -> Tuple[vtk.vtkColorTransferFunction, vtk.vtkPiecewiseFunction]:
+        def _convert_value(_val: Union[int, float]) -> float:
+            if isinstance(_val, int):
+                if _val < 0 or _val > 255:
+                    raise ValueError(f'Invalid color value: {_val}')
+                return _val / 255.0
+            elif isinstance(_val, float):
+                if _val < 0 or _val > 1.0:
+                    raise ValueError(f'Invalid color value: {_val}')
+                return _val
+            else:
+                raise ValueError(f'Invalid color value: {_val}')
+
+        vtk_color = vtk.vtkColorTransferFunction()
+        vtk_scalar_opacity = vtk.vtkPiecewiseFunction()
+        for class_id, color in color_table.items():
+            r, g, b, a = map(_convert_value, color)
+            vtk_color.AddRGBPoint(class_id, r, g, b)
+            vtk_scalar_opacity.AddPoint(class_id, a)
+        return vtk_color, vtk_scalar_opacity
+
     @staticmethod
     def np_image_to_vtk(
             image: npt.NDArray,
@@ -383,6 +416,7 @@ position_view_camera = VTKUtils.position_view_camera
 capture_window_as_numpy = VTKUtils.capture_window_as_numpy
 resample = VTKUtils.resample
 clip = VTKUtils.clip
+build_labelmap_color = VTKUtils.build_labelmap_color
 np_image_to_vtk = VTKUtils.np_image_to_vtk
 vtk_image_to_np = VTKUtils.vtk_image_to_np
 
