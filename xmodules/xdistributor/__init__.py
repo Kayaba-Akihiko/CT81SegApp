@@ -21,8 +21,9 @@ def get_distributor(
         precision: TypePrecision = '32-true',
         strategy: TypeStrategy = 'auto',
 ) -> DistributorProtocol:
-    if isinstance(devices, str) and devices != 'auto':
-        devices = int(devices)
+    if isinstance(devices, str):
+        if devices != 'auto':
+            devices = int(devices)
     elif isinstance(devices, int):
         pass
     else:
