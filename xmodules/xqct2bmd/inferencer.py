@@ -6,7 +6,7 @@
 #  without the express permission of Yi GU.
 
 import logging
-from typing import Literal, Any, Optional, Union, TypeAlias, Dict, List
+from typing import Literal, Any, Optional, Union, TypeAlias, Dict, List, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 import functools
@@ -61,7 +61,7 @@ class Inferencer:
             norm_config_path: Path,
             in_shape: tuple[int, ...],
             out_shape: tuple[int, ...],
-            onnx_providers: List[str],
+            onnx_providers: Sequence[str | tuple[str, dict[Any, Any]]] | None,
     ):
         so = ort.SessionOptions()
         so.intra_op_num_threads = os_utils.get_max_n_worker()
@@ -70,7 +70,7 @@ class Inferencer:
             # onnx_model.SerializeToString(),
             str(model_path.resolve()),
             sess_options=so,
-            providers=list(onnx_providers),
+            providers=onnx_providers,
         )
         _logger.info(f'Load normalization config from {norm_config_path} .')
         data_norm = DataNormalizer.from_config_file(norm_config_path)
