@@ -110,13 +110,13 @@ class FigureUtils:
             draw_box = True
             draw_star = True
 
-            if not _is_valid_val(mean) or not _is_valid_val(std):
-                draw_box = False
-            if _is_valid_val(std) and std <= 0.0:
-                draw_box = False
-
-            if _is_valid_val(target):
-                draw_star = False
+            # if not _is_valid_val(mean) or not _is_valid_val(std):
+            #     draw_box = False
+            # if _is_valid_val(std) and std <= 0.0:
+            #     draw_box = False
+            #
+            # if _is_valid_val(target):
+            #     draw_star = False
 
             if draw_box:
                 x0 = mean - std
