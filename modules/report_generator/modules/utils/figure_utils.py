@@ -48,15 +48,15 @@ class FigureUtils:
             ax = fig.add_axes([0, 0, 1, 1])
             pixel_mode = True
 
-        if xlim is None:
-            x_min, x_max = None, None
-        else:
-            x_min, x_max = float(xlim[0]), float(xlim[1])
+        # ----------------------------
+        # Helpers
+        # ----------------------------
+        def _is_valid_number(val) -> bool:
+            try:
+                return val is not None and np.isfinite(float(val))
+            except Exception:
+                return False
 
-        ax.set_xlim(x_min, x_max)
-        if xlim is not None:
-            ax.set_xticks(np.linspace(x_min, x_max, 6))
-        ax.set_xticklabels([])
 
         if pixel_mode:
             pad_px = 6.0
@@ -91,15 +91,22 @@ class FigureUtils:
             box_h = 0.7
             y_centers = None
 
-        def _is_valid_val(val):
-            if val is None:
-                return False
-            if np.isnan(val):
-                return False
-            if np.isinf(val):
-                return False
-            return True
+        # ----------------------------
+        # X limits
+        # IMPORTANT: do NOT call ax.set_xlim(None, None)
+        # ----------------------------
+        if xlim is not None:
+            x_min, x_max = float(xlim[0]), float(xlim[1])
+            ax.set_xlim(x_min, x_max)
+            ax.set_xticks(np.linspace(x_min, x_max, 6))
+        else:
+            x_min = x_max = None  # will autoscale after we add artists
 
+        ax.set_xticklabels([])
+
+        # ----------------------------
+        # Draw boxes / stars
+        # ----------------------------
         for i, box_data in enumerate(boxes):
             if not box_data.visible:
                 continue
@@ -107,16 +114,8 @@ class FigureUtils:
             target = box_data.target
             mean, std = box_data.mean, box_data.std
 
-            draw_box = True
-            draw_star = True
-
-            # if not _is_valid_val(mean) or not _is_valid_val(std):
-            #     draw_box = False
-            # if _is_valid_val(std) and std <= 0.0:
-            #     draw_box = False
-            #
-            # if _is_valid_val(target):
-            #     draw_star = False
+            draw_box = _is_valid_number(mean) and _is_valid_number(std) and float(std) > 0.0
+            draw_star = _is_valid_number(target)
 
             if draw_box:
                 x0 = mean - std
@@ -130,26 +129,26 @@ class FigureUtils:
                         edgecolor='black', linewidth=0.1, antialiased=False)
 
                     ax.add_patch(rect)
-                    half = int(round(box_h * 0.48))
+                    # half = int(round(box_h * 0.48))
+                    half = max(1, int(round(box_h * 0.48)))
                     ax.plot(
                         [mean, mean],
                         [y_c - half, y_c + half],
                         color='black',
                         linewidth=1.2, antialiased=False)
                 else:
+                    y = y_pos[i]
                     rect = Rectangle(
-                        (x0, y_pos[i] - 0.35),
-                        width, 0.7,
-                        facecolor=color,
-                        edgecolor='black',
-                        alpha=0.8, linewidth=0.1)
-
+                        (x0, y - 0.35), width, 0.7,
+                        facecolor=color, edgecolor="black",
+                        alpha=0.8, linewidth=0.1
+                    )
                     ax.add_patch(rect)
                     ax.plot(
                         [mean, mean],
-                        [y_pos[i] - 0.38, y_pos[i] + 0.38],
-                        color='black',
-                        linewidth=1.2)
+                        [y - 0.38, y + 0.38],
+                        color="black", linewidth=1.2
+                    )
 
             if draw_star:
                 if pixel_mode:
@@ -166,21 +165,33 @@ class FigureUtils:
                         facecolor='black', edgecolors='white',
                         linewidths=0.7, zorder=5)
 
+        # If xlim not provided, autoscale to the patches/points we added
+        if xlim is None:
+            ax.relim()
+            ax.autoscale_view()
+
+        # ----------------------------
+        # Draw "invisible" rows as horizontal lines across current x-range
+        # ----------------------------
+        xmin_line, xmax_line = ax.get_xlim()
         for i, box_data in enumerate(boxes):
             if box_data.visible:
                 continue
             if pixel_mode:
                 y_c = y_centers[i]
                 ax.hlines(
-                    int(y_c), x_min, x_max,
+                    int(y_c), xmin_line, xmax_line,
                     colors='black',
                     linewidth=1.0, zorder=6, antialiased=False)
             else:
                 ax.hlines(
-                    y_pos[i], x_min, x_max,
+                    y_pos[i], xmin_line, xmax_line,
                     colors='black',
                     linewidth=1.0, zorder=6)
 
+        # ----------------------------
+        # Styling + export
+        # ----------------------------
         ax.set_yticks([])
         ax.grid(True)
         for spine in ax.spines.values():
