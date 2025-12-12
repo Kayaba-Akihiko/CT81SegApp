@@ -8,6 +8,9 @@ import imageio.v3 as iio
 from pptx import Presentation
 from pptx.util import Inches
 
+from lightning.fabric.strategies.launchers.multiprocessing import _MultiProcessingLauncher
+from lightning.fabric.strategies.launchers.subprocess_script import _SubprocessScriptLauncher
+
 
 def main():
 

@@ -68,7 +68,7 @@ class DummyDistributor(BaseDistributor):
             self._device = torch.device(accelerator)
 
 
-    def launch(self) -> None:
+    def _launch(self) -> None:
         return
 
     def to_device(

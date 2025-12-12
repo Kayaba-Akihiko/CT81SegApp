@@ -14,6 +14,7 @@ import logging
 import shutil
 from contextlib import ExitStack, contextmanager, nullcontext
 from pathlib import Path
+import importlib.util
 
 from fsspec import register_implementation
 from fsspec.implementations.local import LocalFileOpener, LocalFileSystem
@@ -101,7 +102,7 @@ class FabricDistributor(BaseDistributor):
             raise NotImplementedError(strategy)
         _logger.info(f'Using strategy {strategy}.')
 
-    def launch(self) -> None:
+    def _launch(self) -> None:
         self.fabric.launch()
         _logger.info('Running fabric.')
         self.global_rank = self.fabric.global_rank
@@ -113,6 +114,21 @@ class FabricDistributor(BaseDistributor):
             f'local_rank {self.local_rank}\n'
             f'world_size {self.world_size}'
         )
+
+        if self.is_distributed():
+            try:
+                import cupy as cp
+                try:
+                    cp.cuda.Device(self.fabric.local_rank).use()
+                    _logger.info(f'Set Cupy device {self.fabric.local_rank}.')
+                except cp.cuda.runtime.CUDARuntimeError:
+                    pass
+            except ImportError:
+                cp = None
+
+            if importlib.util.find_spec('vtk') is not None:
+                os.environ['VTK_DEFAULT_EGL_DEVICE_INDEX'] = str(self.fabric.local_rank)
+                _logger.info(f'Set VTK EGL device to {self.fabric.local_rank}.')
 
     def to_device(
             self,

@@ -81,6 +81,18 @@ class BaseDistributor(ABC, DistributorProtocol):
             np.dtypes.UInt32DType,
         ])
 
+        self._launched = False
+
+    def launch(self) -> None:
+        if self._launched:
+            raise RuntimeError('Already launched.')
+        self._backend_launch()
+        self._launched = True
+
+    @abstractmethod
+    def _backend_launch(self) -> None:
+        raise NotImplementedError()
+
     def save_checkpoint(
             self,
             save_dir: Path,
