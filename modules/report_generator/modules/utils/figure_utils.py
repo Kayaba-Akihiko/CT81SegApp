@@ -91,16 +91,26 @@ class FigureUtils:
             box_h = 0.7
             y_centers = None
 
-        # ----------------------------
-        # X limits
-        # IMPORTANT: do NOT call ax.set_xlim(None, None)
-        # ----------------------------
-        if xlim is not None:
-            x_min, x_max = float(xlim[0]), float(xlim[1])
-            ax.set_xlim(x_min, x_max)
-            ax.set_xticks(np.linspace(x_min, x_max, 6))
+        # ---- X limits (data-driven, includes boxes + stars) ----
+        if xlim is None:
+            xs = []
+            for b in boxes:
+                if not getattr(b, "visible", True):
+                    continue
+                if _is_valid_number(b.mean) and _is_valid_number(b.std) and float(b.std) > 0:
+                    m, s = float(b.mean), float(b.std)
+                    xs.extend([m - s, m + s])
+                if _is_valid_number(b.target):
+                    xs.append(float(b.target))
+
+            if xs:
+                xmin, xmax = min(xs), max(xs)
+                rng = max(1e-6, xmax - xmin)
+                pad = 0.02 * rng
+                ax.set_xlim(xmin - pad, xmax + pad)
         else:
-            x_min = x_max = None  # will autoscale after we add artists
+            ax.set_xlim(float(xlim[0]), float(xlim[1]))
+            ax.set_xticks(np.linspace(xlim[0], xlim[1], 6))
 
         ax.set_xticklabels([])
 
@@ -164,16 +174,6 @@ class FigureUtils:
                         marker='*', s=s_star,
                         facecolor='black', edgecolors='white',
                         linewidths=0.7, zorder=5)
-
-        # If xlim not provided, autoscale to the patches/points we added
-        if xlim is None:
-            ax.relim()
-            ax.autoscale_view()
-
-            xmin, xmax = ax.get_xlim()
-            rng = max(1e-6, xmax - xmin)
-            pad = 0.02 * rng
-            ax.set_xlim(xmin - pad, xmax + pad)
 
         # ----------------------------
         # Draw "invisible" rows as horizontal lines across current x-range
