@@ -6,12 +6,12 @@
 #  without the express permission of Yi GU.
 
 
-from typing import Tuple, Optional, Union, Dict, Any, TypeAlias, Literal, Type, TypeVar, Protocol, List, Sequence
+from typing import Self, Tuple, Optional, Union, Dict, Any, TypeAlias, Literal, Type, TypeVar, Protocol, List, Sequence
 from pathlib import Path
 from collections import OrderedDict, defaultdict
 import json
 import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 import numpy as np
 import numpy.typing as npt
@@ -23,12 +23,59 @@ from .modules.report_ppt import ReportPPT, PPTXPresentation, FillImageData as Re
 from .modules.labelmap_renderer import LabelmapRenderer
 from .modules.utils import figure_utils
 
+TypeSex: TypeAlias = Literal['male', 'female']
 
 @dataclass
 class ClassGroupData:
     name: str
     class_ids:List[int]
     rendering_view: vtk_utils.TypeView
+
+@dataclass
+class PatientInfoData:
+    name: Optional[str] = None
+    sex: Optional[TypeSex] = None
+    age: Optional[Union[float, int]] = None
+    birth_year: Optional[int] = None
+    birth_month: Optional[int] = None
+    birth_day: Optional[int] = None
+    height: Optional[Union[float, int]] = None
+    weight: Optional[Union[float, int]] = None
+    shooting_year: Optional[int] = None
+    shooting_month: Optional[int] = None
+    shooting_day: Optional[int] = None
+
+    @classmethod
+    def from_dict(cls, source_dict: Dict[str, Any]) -> Self:
+        # valid field names (lowercase → actual name)
+        field_map = {f.name.lower(): f.name for f in fields(cls)}
+
+        build_dict: Dict[str, Any] = {}
+
+        for key, val in source_dict.items():
+            key_l = key.lower()
+
+            if key_l not in field_map:
+                continue  # ignore unknown keys
+
+            field_name = field_map[key_l]
+
+            if field_name == "sex" and val is not None:
+                if not isinstance(val, str):
+                    raise TypeError(f'Invalid type {type(val)=}')
+                if val not in {'male', 'female'}:
+                    raise ValueError(f'Invalid value {val=}')
+                build_dict[field_name] = val
+            elif field_name == "age":
+                if not isinstance(val, (int, float)):
+                    raise TypeError(f'Invalid type {type(val)=}')
+                if val <= 0:
+                    raise ValueError(f'Invalid value {val=}')
+                build_dict[field_name] = val
+            # ... lots to check ...
+
+        return cls(**build_dict)
+
 
 class ReportGenerator:
 
@@ -140,11 +187,10 @@ class ReportGenerator:
 
     def generate(
             self,
+            patient_info: Union[PatientInfoData, Dict[str, Any]],
             labelmap: npt.NDArray[np.integer],
             spacing: npt.NDArray[np.float64],
             class_mean_hus: npt.NDArray[np.float64],
-            sex: Literal['male', 'female'],
-            age: int,
             save_path: Path,
             fig_dpi=96,
             device='cpu'
@@ -156,17 +202,25 @@ class ReportGenerator:
         if len(spacing) != labelmap.ndim:
             raise ValueError('Spacing must have the same length as labelmap')
 
-        if sex not in {'male', 'female'}:
-            raise ValueError(f'Invalid sex: {sex}')
+        if isinstance(patient_info, dict):
+            patient_info = PatientInfoData.from_dict(patient_info)
+        elif isinstance(patient_info, PatientInfoData):
+            pass
+        else:
+            raise TypeError(f'Invalid patient info type: {type(patient_info)}')
 
-        if age < 0:
-            raise ValueError(f'Invalid age: {age}')
+        sex = patient_info.sex
+        age = patient_info.age
 
-        age_sex_hu_df = self._hu_statistics_df.filter(
-            (pl.col('sex') == sex)
-            & (pl.col('age_group_low') <= age)
-            & (pl.col('age_group_high') >= age)
-        )
+        age_sex_hu_df = self._hu_statistics_df
+        if sex is not None:
+            age_sex_hu_df = age_sex_hu_df.filter(
+                pl.col('sex') == sex)
+        if age is not None:
+            age_sex_hu_df = age_sex_hu_df.filter(
+                (pl.col('age_group_low') <= age)
+                & (pl.col('age_group_high') >= age)
+            )
 
         max_rows = max(len(v.class_ids) for v in self._class_groups.values() if v is not None)
         row_gap_px = 8
@@ -175,6 +229,24 @@ class ReportGenerator:
         s_star_common = figure_utils.star_size_points2_from_box_height(
             common_box_height_px, dpi=fig_dpi, scale=1.5
         )
+
+        def _mix_gaussians(_means, _vars, _weights=None):
+            _means = np.asarray(_means, dtype=np.float64)
+            _vars = np.asarray(_vars, dtype=np.float64)
+
+            if _means.shape != _vars.shape:
+                raise ValueError("means and vars must have the same shape")
+
+            _n = _means.size
+            if _weights is None:
+                _weights = np.full(_n, 1.0 / _n)
+            else:
+                _weights = np.asarray(_weights, dtype=np.float64)
+                _weights = _weights / _weights.sum()
+
+            _mu = np.sum(_weights * _means)
+            _var = np.sum(_weights * (_vars + _means ** 2)) - _mu ** 2
+            return _mu, _var
 
         report_ppt = self._report_ppt.copy()
         ppt_image_dict = {}
@@ -187,13 +259,29 @@ class ReportGenerator:
             box_drawing_data = []
             for class_id in class_group_data.class_ids:
                 class_df = age_sex_hu_df.filter(pl.col('class_id') == class_id)
-                if len(class_df) != 1:
-                    raise ValueError(
-                        f'Unexpected number of rows {sex=} {age=} {class_id=}: {len(class_df)}'
-                    )
-                row = class_df.row(0, named=True)
-                mean, std = float(row['mean']), float(row['std'])
-                del row, class_df
+                if len(class_df) <= 0:
+                    raise ValueError(f'No data for class {class_id=}')
+                elif len(class_df) > 1:
+                    # merge distributions
+                    mean, std = np.einsum(
+                        'ij->ji', class_df['mean', 'std'].to_numpy()
+                    ).astype(np.float64)
+                    # validity: finite mean/std and std > 0
+                    valid = np.isfinite(mean) & np.isfinite(std) & (std > 0)
+                    if np.any(valid):
+                        mean, var = _mix_gaussians(mean, np.square(std))
+                        if var > 0:
+                            std = np.sqrt(var)
+                        else:
+                            std = np.nan
+                        del var
+                    else:
+                        mean, std = np.nan, np.nan
+                else:
+                    row = class_df.row(0, named=True)
+                    mean, std = float(row['mean']), float(row['std'])
+                    del row
+                del class_df
 
                 class_mean_hu = float(class_mean_hus[class_id])
                 box_drawing_data.append(figure_utils.BoxDrawingData(
@@ -294,6 +382,33 @@ class ReportGenerator:
         report_ppt.fill_images(fill_images)
         report_ppt.save(save_path)
 
+    def _build_text_placeholders(
+            self,
+            name,
+            sex,
+            age,
+            birth_year,
+            birth_month,
+            birth_day,
+            height,
+            weight,
+            shooting_year,
+            shooting_month,
+            shooting_day,
+    ):
+        return {
+            'NAME': name,
+            'SEX': sex,
+            'BIRTH_YEAR': birth_year,
+            'BIRTH_MONTH': birth_month,
+            'BIRTH_DAY': birth_day,
+            'HEIGHT': height,
+            'WEIGHT': weight,
+            'AGE': age,
+            'SHOOTING_YEAR': shooting_year,
+            'SHOOTING_MONTH': shooting_month,
+            'SHOOTING_DAY': shooting_day,
+        }
 
     @staticmethod
     def _read_dataframe(read_path: Path) -> pl.DataFrame:
