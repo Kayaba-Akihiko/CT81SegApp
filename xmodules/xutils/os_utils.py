@@ -119,7 +119,7 @@ class OSUtils:
                         yield from _walk_dir(entry.path)
 
         for p in path:
-            yield from _walk_dir(path)
+            yield from _walk_dir(p)
 
     @classmethod
     def scan_dirs_for_file(
