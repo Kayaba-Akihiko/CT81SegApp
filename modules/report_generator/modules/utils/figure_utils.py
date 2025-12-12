@@ -56,7 +56,7 @@ class FigureUtils:
         ax.set_xlim(x_min, x_max)
         if xlim is not None:
             ax.set_xticks(np.linspace(x_min, x_max, 6))
-        # ax.set_xticklabels([])
+        ax.set_xticklabels([])
 
         if pixel_mode:
             pad_px = 6.0
@@ -181,7 +181,7 @@ class FigureUtils:
                     colors='black',
                     linewidth=1.0, zorder=6)
 
-        # ax.set_yticks([])
+        ax.set_yticks([])
         ax.grid(True)
         for spine in ax.spines.values():
             spine.set_visible(False)
