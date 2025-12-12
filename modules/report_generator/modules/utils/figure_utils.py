@@ -120,7 +120,7 @@ class FigureUtils:
 
             if draw_box:
                 x0 = mean - std
-                width = 2 * mean
+                width = 2 * std
                 if pixel_mode:
                     y_c = y_centers[i]
                     y0 = int(y_c - box_h // 2)
@@ -194,6 +194,7 @@ class FigureUtils:
             fig.tight_layout(pad=0.1)
             fig.savefig(
                 buf, dpi=160, bbox_inches='tight')
+        buf.seek(0)
         plt.close(fig)
         return iio.imread(buf)
 
