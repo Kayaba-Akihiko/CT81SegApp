@@ -170,6 +170,11 @@ class FigureUtils:
             ax.relim()
             ax.autoscale_view()
 
+            xmin, xmax = ax.get_xlim()
+            rng = max(1e-6, xmax - xmin)
+            pad = 0.02 * rng
+            ax.set_xlim(xmin - pad, xmax + pad)
+
         # ----------------------------
         # Draw "invisible" rows as horizontal lines across current x-range
         # ----------------------------
@@ -199,8 +204,9 @@ class FigureUtils:
 
         buf = io.BytesIO()
         if pixel_mode:
-            fig.savefig(
-                buf, dpi=dpi, bbox_inches=None, pad_inches=0.0)
+            # fig.savefig(
+            #     buf, dpi=dpi, bbox_inches=None, pad_inches=0.0)
+            fig.savefig(buf, dpi=dpi, bbox_inches=None, pad_inches=1.0 / dpi)
         else:
             fig.tight_layout(pad=0.1)
             fig.savefig(
