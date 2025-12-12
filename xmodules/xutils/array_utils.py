@@ -1180,18 +1180,21 @@ class ArrayUtils:
     def unique(
             cls,
             array: TypeArrayLike[NPGeneric],
-            return_inverse = False,
-            return_counts = False,
+            sorted=True,
+            return_inverse=False,
+            return_counts=False,
     ):
+        kwargs = {
+            'return_inverse': return_inverse,
+            'return_counts': return_counts,
+            'sorted': sorted,
+        }
         if isinstance(array, np.ndarray):
-            return np.unique(
-                array, return_inverse=return_inverse, return_counts=return_counts)
+            return np.unique(array, **kwargs)
         elif HAS_CUPY and isinstance(array, cp.ndarray):
-            return cp.unique(
-                array, return_inverse=return_inverse, return_counts=return_counts)
+            return cp.unique(array, **kwargs)
         elif HAS_TORCH and isinstance(array, torch.Tensor):
-            return torch.unique(
-                array, return_inverse=return_inverse, return_counts=return_counts)
+            return torch.unique(array, **kwargs)
         else:
             raise TypeError(
                 f"Unsupported array type: {type(array)}. "
@@ -1542,7 +1545,9 @@ zeros = ArrayUtils.zeros
 ones = ArrayUtils.ones
 isin = ArrayUtils.isin
 where = ArrayUtils.where
+unique = ArrayUtils.unique
 clip = ArrayUtils.clip
+copy = ArrayUtils.copy
 std = ArrayUtils.std
 var = ArrayUtils.var
 round = ArrayUtils.round
