@@ -108,6 +108,7 @@ class FigureUtils:
                 rng = max(1e-6, xmax - xmin)
                 pad = 0.05 * rng
                 ax.set_xlim(xmin - pad, xmax + pad)
+                ax.set_xticks(np.linspace(xmin, xmax, 6))
         else:
             ax.set_xlim(float(xlim[0]), float(xlim[1]))
             ax.set_xticks(np.linspace(xlim[0], xlim[1], 6))
