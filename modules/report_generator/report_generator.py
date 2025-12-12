@@ -242,39 +242,39 @@ class ReportGenerator:
         ppt_image_dict['11'] = front_view
         ppt_image_dict['12'] = back_view
         del front_view, back_view
-        #
-        # for insert_idx, group_name in enumerate(self._class_groups, start=15):
-        #     class_group_data = self._class_groups[group_name]
-        #     if class_group_data is None:
-        #         continue
-        #     #
-        #     class_color_table = copy.deepcopy(self._class_color_table)
-        #     visible_class_ids = set(class_group_data.class_ids)
-        #     visible_class_ids.add(self._skin_class_id)
-        #     for class_id, (r, g, b, a) in class_color_table.items():
-        #         if class_id not in visible_class_ids:
-        #             class_color_table[class_id] = (r, g, b, 0)
-        #
-        #     rendered_image = labelmap_renderer.render(
-        #         view=class_group_data.rendering_view,
-        #         class_color_table=class_color_table,
-        #         bound_z_class_ids=class_group_data.class_ids,
-        #         camera_offset=2500.0 / 2.3,
-        #         shade=self._rendering_config.get('shade', None),
-        #         specular=self._rendering_config.get('specular', None),
-        #         specular_power=self._rendering_config.get('specular_power', None),
-        #         ambient=self._rendering_config.get('ambient', None),
-        #         diffuse=self._rendering_config.get('diffuse', None),
-        #         scalar_opacity_unit_distance=self._rendering_config.get('scalar_opacity_unit_distance', None),
-        #         blend_mode=self._rendering_config.get('blend_mode', None),
-        #         out_size=(1500, 2000),
-        #         device=device,
-        #     )
-        #     ppt_image_dict[f'{insert_idx:02d}'] = rendered_image
-        #     del rendered_image
-        #
-        # ppt_image_dict['13'] = ppt_image_dict['19'].copy()
-        # ppt_image_dict['14'] = ppt_image_dict['20'].copy()
+
+        for insert_idx, group_name in enumerate(self._class_groups, start=15):
+            class_group_data = self._class_groups[group_name]
+            if class_group_data is None:
+                continue
+            #
+            class_color_table = copy.deepcopy(self._class_color_table)
+            visible_class_ids = set(class_group_data.class_ids)
+            visible_class_ids.add(self._skin_class_id)
+            for class_id, (r, g, b, a) in class_color_table.items():
+                if class_id not in visible_class_ids:
+                    class_color_table[class_id] = (r, g, b, 0)
+
+            rendered_image = labelmap_renderer.render(
+                view=class_group_data.rendering_view,
+                class_color_table=class_color_table,
+                bound_z_class_ids=class_group_data.class_ids,
+                camera_offset=2500.0 / 2.3,
+                shade=self._rendering_config.get('shade', None),
+                specular=self._rendering_config.get('specular', None),
+                specular_power=self._rendering_config.get('specular_power', None),
+                ambient=self._rendering_config.get('ambient', None),
+                diffuse=self._rendering_config.get('diffuse', None),
+                scalar_opacity_unit_distance=self._rendering_config.get('scalar_opacity_unit_distance', None),
+                blend_mode=self._rendering_config.get('blend_mode', None),
+                out_size=(1500, 2000),
+                device=device,
+            )
+            ppt_image_dict[f'{insert_idx:02d}'] = rendered_image
+            del rendered_image
+
+        ppt_image_dict['13'] = ppt_image_dict['19'].copy()
+        ppt_image_dict['14'] = ppt_image_dict['20'].copy()
 
         fit_mode: Dict[str, TypeReportFitMode] = {}
         fit_mode.update({f'{i:02d}': 'match_height' for i in range(1, 13)})

@@ -80,11 +80,7 @@ class LabelmapRenderer:
                 image=image, extent=(x0, x1, y0, y1, z0, z1), return_port=False)
             del x0, x1, y0, y1, z0, z1
 
-        color = vtk.vtkColorTransferFunction()
-        scalar_opacity = vtk.vtkPiecewiseFunction()
-        for class_id, (r, g, b, a) in class_color_table.items():
-            color.AddRGBPoint(class_id, r, g, b)
-            scalar_opacity.AddPoint(class_id, a)
+        color, scalar_opacity = vtk_utils.build_labelmap_color(class_color_table)
 
         if isinstance(image, vtk.vtkAlgorithmOutput):
             image = image.GetProducer().GetOutput()
