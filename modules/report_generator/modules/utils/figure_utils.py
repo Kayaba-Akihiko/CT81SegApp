@@ -106,7 +106,7 @@ class FigureUtils:
             if xs:
                 xmin, xmax = min(xs), max(xs)
                 rng = max(1e-6, xmax - xmin)
-                pad = 0.02 * rng
+                pad = 0.05 * rng
                 ax.set_xlim(xmin - pad, xmax + pad)
         else:
             ax.set_xlim(float(xlim[0]), float(xlim[1]))
