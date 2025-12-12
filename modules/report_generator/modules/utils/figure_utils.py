@@ -47,14 +47,10 @@ class FigureUtils:
             fig = plt.figure(figsize=(w_px / dpi, h_px / dpi), dpi=dpi)
             ax = fig.add_axes([0, 0, 1, 1])
             pixel_mode = True
-        if xlim is None:
-            x_min, x_max = 0.0, 1.0
-        else:
+        if xlim is not None:
             x_min, x_max = float(xlim[0]), float(xlim[1])
-            if not np.isfinite(x_min) or not np.isfinite(x_max) or x_min == x_max:
-                x_min, x_max = 0.0, 1.0
+            ax.set_xlim(x_min, x_max)
 
-        ax.set_xlim(x_min, x_max)
         ax.set_xticks(np.linspace(x_min, x_max, 6))
         ax.set_xticklabels([])
 
