@@ -178,31 +178,59 @@ class ReportPPT:
             raise ValueError('One path must be specified.')
 
         if pptx_save_path is not None:
-            pptx_save_path.parent.mkdir(parents=True, exist_ok=True)
-            self.presentation.save(str(pptx_save_path))
+            # If caller passes an IO, python-pptx can save to it directly.
+            if isinstance(pptx_save_path, Path):
+                pptx_save_path.parent.mkdir(parents=True, exist_ok=True)
+                self.presentation.save(str(pptx_save_path))
+            else:
+                self.presentation.save(pptx_save_path)
 
         if pdf_save_path or image_save_path is not None:
-            with tempfile.TemporaryDirectory() as temp_dir_name:
+            with tempfile.TemporaryDirectory(prefix="lo_") as temp_dir_name:
                 temp_dir = Path(temp_dir_name)
-                temp_pptx_path = temp_dir / 'temp_ppt.pptx'
-                temp_pdf_path = temp_dir / f'{temp_pptx_path.stem}.pdf'
-                self.presentation.save(str(temp_pptx_path))
+                if pptx_save_path is not None:
+                    temp_pptx_path = pptx_save_path
+                else:
+                    temp_pptx_path = temp_dir / "temp_ppt.pptx"
+                    self.presentation.save(str(temp_pptx_path))
 
+                # Use an isolated LO profile to avoid lock/hang issues
+                profile_dir = temp_dir / "profile"
+                profile_dir.mkdir(parents=True, exist_ok=True)
+
+                # Convert PPTX -> PDF
                 cmd = [
-                    "libreoffice",
+                    "soffice",  # prefer soffice over libreoffice
                     "--headless",
-                    "--convert-to", "pdf",
+                    "--nologo",
+                    "--nolockcheck",
+                    "--nodefault",
+                    "--norestore",
+                    f"-env:UserInstallation=file://{profile_dir}",
+                    "--convert-to", "pdf:impress_pdf_Export",
                     "--outdir", str(temp_dir),
-                    str(temp_pdf_path)
+                    str(temp_pptx_path),  # ✅ INPUT IS PPTX
                 ]
-                subprocess.run(cmd, check=True)
+                r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                if r.returncode != 0:
+                    raise RuntimeError(f"LibreOffice failed (code {r.returncode}).\nSTDERR:\n{r.stderr}\nSTDOUT:\n{r.stdout}")
+
+                temp_pdf_path = temp_dir / f"{temp_pptx_path.stem}.pdf"
+                if not temp_pdf_path.exists():
+                    raise RuntimeError(f"LibreOffice reported success but PDF not found: {temp_pdf_path}")
+
                 if pdf_save_path is not None:
+                    pdf_save_path.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(temp_pdf_path, pdf_save_path)
 
                 if image_save_path is not None:
+                    # Requires poppler installed for pdf2image on Linux:
+                    # sudo apt-get install -y poppler-utils
                     from pdf2image import convert_from_path
-                    images = convert_from_path(temp_pdf_path)
-                    images[0].save(image_save_path)
+
+                    pages = convert_from_path(str(temp_pdf_path), dpi=200)
+                    # If image_save_path is a Path, save to it; if it's a file-like object, PIL can write to it too.
+                    pages[0].save(str(image_save_path) if isinstance(image_save_path, Path) else image_save_path)
 
     @classmethod
     def _iter_shapes(cls, shapes: PPTXSlideShapes):
