@@ -21,6 +21,7 @@ from pptx.presentation import (
     Presentation as PPTXPresentation,
 )
 from pptx.shapes.picture import Picture as PPTXPicture
+from pptx.shapes.base import BaseShape as PPTXBaseShape
 from pptx.util import Length as PPTXLength
 from pptx.text.text import _Run as PPTXRun
 from pptx.slide import (
@@ -65,105 +66,256 @@ class ReportPPT:
     def copy(self) -> Self:
         return ReportPPT(self.presentation, fit_mode=self.fit_mode)
 
-    def collect_shape_sizes(
-            self, dpi: int = 96
-    ) -> Dict[str, Tuple[int, int]]:
+    @staticmethod
+    def _extract_img_key(shape: PPTXBaseShape) -> Optional[str]:
+        """Return IMG key from shape.name like '...IMG:foo', else None."""
+        name = (getattr(shape, "name", "") or "")
+        marker = "IMG:"
+        idx = name.find(marker)
+        if idx < 0:
+            return None
+        key = name[idx + len(marker):].strip()
+        return key or None
+
+    def collect_shape_sizes(self, dpi: int = 96) -> Dict[str, Tuple[int, int]]:
+        """
+        Collect placeholder (IMG:key) sizes in pixels.
+
+        If multiple shapes share the same key, the last one wins (and a warning is logged).
+        """
         sizes: Dict[str, Tuple[int, int]] = {}
+
         for slide in self.presentation.slides:
             for shape in self._iter_shapes(slide.shapes):
-                name = getattr(shape, 'name', '') or ''
-                if 'IMG:' not in name:
-                    continue
-
-                key = name.split('IMG:', 1)[1].strip()
+                key = self._extract_img_key(shape)
                 if not key:
                     continue
+
                 w_px = self._emu_to_px(shape.width, dpi)
                 h_px = self._emu_to_px(shape.height, dpi)
+
+                if key in sizes:
+                    _logger.warning(f"Duplicate IMG key '{key}' found; overriding previous size.")
                 sizes[key] = (w_px, h_px)
 
         return sizes
 
-    def fill_images(
-            self,
-            images: Dict[str, FillImageData],
-    ) -> Dict[str, PPTXPicture]:
-        res: Dict[str, PPTXPicture] = {}
-        finished_key = set()
+    def fill_images(self, images: Dict[str, FillImageData]) -> Dict[str, PPTXPicture]:
+        """
+        Fill IMG:key placeholders with images.
+
+        - Validates missing images early
+        - Returns dict key->picture
+        """
+        res: Dict[str, "PPTXPicture"] = {}
+        finished_keys: set[str] = set()
+
+        # Pre-validate input (fail fast)
+        for k, d in images.items():
+            if d.image is None:
+                raise ValueError(f"Image not found: {k}")
+
         for slide in self.presentation.slides:
             for shape in self._iter_shapes(slide.shapes):
-                name = getattr(shape, 'name', '') or ''
-                if 'IMG:' not in name:
+                key = self._extract_img_key(shape)
+                if not key:
+                    continue
+                if key not in images:
                     continue
 
-                key = name.split('IMG:', 1)[1].strip()
-                if not key or key not in images:
-                    continue
-                fill_image_data = images[key]
-                if fill_image_data.image is None:
-                    raise ValueError(f'Image not found: {key}')
+                d = images[key]
                 pic = self._fit_image_into_slide(
-                    slide, fill_image_data.image,
+                    slide,
+                    d.image,
                     (shape.left, shape.top, shape.width, shape.height),
-                    fill_image_data.fill_mode
+                    d.fill_mode,
                 )
 
-                if fill_image_data.send_to_back:
+                if d.send_to_back:
+                    # Best-effort: move element earlier within its parent
                     el = pic._element
                     parent = el.getparent()
-                    parent.remove(el)
-                    parent.insert(2, el)
+                    if parent is not None:
+                        try:
+                            parent.remove(el)
+                            parent.insert(0, el)  # "back" (usually)
+                        except Exception:
+                            _logger.exception("Failed to send picture to back for key=%s", key)
 
                 res[key] = pic
-                finished_key.add(key)
-        unknown_filling_keys = set(images.keys()) - finished_key
-        if unknown_filling_keys:
-            _logger.warning(
-                f'Unknown filling keys: {unknown_filling_keys}')
+                finished_keys.add(key)
+
+        unknown = set(images.keys()) - finished_keys
+        if unknown:
+            _logger.warning(f"Unknown filling keys: {sorted(unknown)}")
+
         return res
 
-    def fill_texts(self, mapping: dict[str, str]) -> Dict[str, PPTXRun]:
-        tokens = {f'{{{{{k}}}}}': str(v) for k, v in mapping.items()}
+    @staticmethod
+    def _replace_tokens_in_runs(
+            runs, token_map: Dict[str, str], res: Dict[str, PPTXRun], finished: set[str]) -> None:
+        """
+        Replace tokens in a list of runs in-place.
+        token_map: token -> replacement string
+        res: mapping from key -> run (first run where key was replaced, best-effort)
+        """
+        # To allow res[key] mapping, we need key->token too
+        # token_map is token->value; derive key from token "{{key}}"
+        for r in runs:
+            text = r.text
+            if not text:
+                continue
 
-        finished_key = set()
-        res: Dict[str, PPTXRun] = {}
+            new_text = text
+            for token, val in token_map.items():
+                if token in new_text:
+                    new_text = new_text.replace(token, val)
+                    # Extract key name from token "{{key}}"
+                    key = token[2:-2]
+                    # Store first run where we replaced this key
+                    if key not in res:
+                        res[key] = r
+                    finished.add(key)
+
+            if new_text != text:
+                r.text = new_text
+
+    def fill_texts(self, mapping: Dict[str, str]) -> Dict[str, PPTXRun]:
+        """
+        Replace {{key}} tokens in text frames and table cells.
+
+        Returns key -> PPTXRun where the replacement occurred (best-effort, first run).
+        """
+        token_map = {f"{{{{{k}}}}}": str(v) for k, v in mapping.items()}
+
+        finished: set[str] = set()
+        res: Dict[str, "PPTXRun"] = {}
+
         for slide in self.presentation.slides:
             for shape in self._iter_shapes(slide.shapes):
-                if getattr(shape, 'has_text_frame', False) and shape.has_text_frame:
-                    for p in shape.text_frame.paragraphs:
-                        for r in p.runs:
-                            text = r.text
-                            for (tk, val), check_key in zip(tokens.items(), mapping):
-                                if tk in text:
-                                    text = text.replace(tk, val)
-                                    res[check_key] = r
-                                    finished_key.add(check_key)
-                            if text != r.text:
-                                r.text = text
+                # Text frames
+                if getattr(shape, "has_text_frame", False) and shape.has_text_frame:
+                    tf = shape.text_frame
+                    for p in tf.paragraphs:
+                        self._replace_tokens_in_runs(p.runs, token_map, res, finished)
 
-                if getattr(shape, 'has_table', False) and shape.has_table:
+                # Tables
+                if getattr(shape, "has_table", False) and shape.has_table:
                     tbl = shape.table
-                    for r_i in range(len(tbl.rows)):
-                        for c_i in range(len(tbl.columns)):
-                            cell = tbl.cell(r_i, c_i)
-                            tf = getattr(cell, 'text_frame', None)
+                    # python-pptx exposes rows/cols; iterate directly
+                    for row in tbl.rows:
+                        for cell in row.cells:
+                            tf = getattr(cell, "text_frame", None)
                             if tf is None:
                                 continue
                             for p in tf.paragraphs:
-                                for r in p.runs:
-                                    text = r.text
-                                    for (tk, val), check_key in zip(tokens.items(), mapping):
-                                        if tk in text:
-                                            text = text.replace(tk, val)
-                                            res[check_key] = r
-                                            finished_key.add(check_key)
-                                    if text != r.text:
-                                        r.text = text
-        unknown_filling_keys = set(mapping.keys()) - finished_key
-        if unknown_filling_keys:
-            _logger.warning(
-                f'Unknown filling keys: {unknown_filling_keys}')
+                                self._replace_tokens_in_runs(p.runs, token_map, res, finished)
+
+        unknown = set(mapping.keys()) - finished
+        if unknown:
+            _logger.warning(f"Unknown filling keys: {sorted(unknown)}")
+
         return res
+
+    # def collect_shape_sizes(
+    #         self, dpi: int = 96
+    # ) -> Dict[str, Tuple[int, int]]:
+    #     sizes: Dict[str, Tuple[int, int]] = {}
+    #     for slide in self.presentation.slides:
+    #         for shape in self._iter_shapes(slide.shapes):
+    #             name = getattr(shape, 'name', '') or ''
+    #             if 'IMG:' not in name:
+    #                 continue
+    #
+    #             key = name.split('IMG:', 1)[1].strip()
+    #             if not key:
+    #                 continue
+    #             w_px = self._emu_to_px(shape.width, dpi)
+    #             h_px = self._emu_to_px(shape.height, dpi)
+    #             sizes[key] = (w_px, h_px)
+    #
+    #     return sizes
+    #
+    # def fill_images(
+    #         self,
+    #         images: Dict[str, FillImageData],
+    # ) -> Dict[str, PPTXPicture]:
+    #     res: Dict[str, PPTXPicture] = {}
+    #     finished_key = set()
+    #     for slide in self.presentation.slides:
+    #         for shape in self._iter_shapes(slide.shapes):
+    #             name = getattr(shape, 'name', '') or ''
+    #             if 'IMG:' not in name:
+    #                 continue
+    #
+    #             key = name.split('IMG:', 1)[1].strip()
+    #             if not key or key not in images:
+    #                 continue
+    #             fill_image_data = images[key]
+    #             if fill_image_data.image is None:
+    #                 raise ValueError(f'Image not found: {key}')
+    #             pic = self._fit_image_into_slide(
+    #                 slide, fill_image_data.image,
+    #                 (shape.left, shape.top, shape.width, shape.height),
+    #                 fill_image_data.fill_mode
+    #             )
+    #
+    #             if fill_image_data.send_to_back:
+    #                 el = pic._element
+    #                 parent = el.getparent()
+    #                 parent.remove(el)
+    #                 parent.insert(2, el)
+    #
+    #             res[key] = pic
+    #             finished_key.add(key)
+    #     unknown_filling_keys = set(images.keys()) - finished_key
+    #     if unknown_filling_keys:
+    #         _logger.warning(
+    #             f'Unknown filling keys: {unknown_filling_keys}')
+    #     return res
+    #
+    # def fill_texts(self, mapping: dict[str, str]) -> Dict[str, PPTXRun]:
+    #     tokens = {f'{{{{{k}}}}}': str(v) for k, v in mapping.items()}
+    #
+    #     finished_key = set()
+    #     res: Dict[str, PPTXRun] = {}
+    #     for slide in self.presentation.slides:
+    #         for shape in self._iter_shapes(slide.shapes):
+    #             if getattr(shape, 'has_text_frame', False) and shape.has_text_frame:
+    #                 for p in shape.text_frame.paragraphs:
+    #                     for r in p.runs:
+    #                         text = r.text
+    #                         for (tk, val), check_key in zip(tokens.items(), mapping):
+    #                             if tk in text:
+    #                                 text = text.replace(tk, val)
+    #                                 res[check_key] = r
+    #                                 finished_key.add(check_key)
+    #                         if text != r.text:
+    #                             r.text = text
+    #
+    #             if getattr(shape, 'has_table', False) and shape.has_table:
+    #                 tbl = shape.table
+    #                 for r_i in range(len(tbl.rows)):
+    #                     for c_i in range(len(tbl.columns)):
+    #                         cell = tbl.cell(r_i, c_i)
+    #                         tf = getattr(cell, 'text_frame', None)
+    #                         if tf is None:
+    #                             continue
+    #                         for p in tf.paragraphs:
+    #                             for r in p.runs:
+    #                                 text = r.text
+    #                                 for (tk, val), check_key in zip(tokens.items(), mapping):
+    #                                     if tk in text:
+    #                                         text = text.replace(tk, val)
+    #                                         res[check_key] = r
+    #                                         finished_key.add(check_key)
+    #                                 if text != r.text:
+    #                                     r.text = text
+    #     unknown_filling_keys = set(mapping.keys()) - finished_key
+    #     if unknown_filling_keys:
+    #         _logger.warning(
+    #             f'Unknown filling keys: {unknown_filling_keys}')
+    #     return res
 
     def save(
             self,
@@ -322,6 +474,16 @@ REG_XCU = """
   <item oor:path="/org.openoffice.Office.Common/Font/Substitution">
     <prop oor:name="ReplaceTable" oor:op="fuse">
       <value>
+        <it>
+          <prop oor:name="ReplaceFont"><value>Meiryo UI</value></prop>
+          <prop oor:name="SubstituteFont"><value>Noto Sans CJK JP</value></prop>
+          <prop oor:name="Always"><value>true</value></prop>
+        </it>
+        <it>
+          <prop oor:name="ReplaceFont"><value>メイリオ UI</value></prop>
+          <prop oor:name="SubstituteFont"><value>Noto Sans CJK JP</value></prop>
+          <prop oor:name="Always"><value>true</value></prop>
+        </it>
         <it>
           <prop oor:name="ReplaceFont"><value>Meiryo</value></prop>
           <prop oor:name="SubstituteFont"><value>Noto Sans CJK JP</value></prop>
