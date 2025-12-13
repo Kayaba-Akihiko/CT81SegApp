@@ -98,6 +98,7 @@ def _calculate_mean_hu(
         image: npt.NDArray, labelmap: npt.NDArray[np.integer],
         n_classes: int = 81,
 ):
+    print(type(image))
     # Image: (N, H, W) (500, 512, 512)
     # Labelmap: (N, H, W) (500, 512, 512)
     res = []
