@@ -116,6 +116,10 @@ class FabricDistributor(BaseDistributor):
         )
 
         if self.is_distributed():
+            if self.fabric.accelerator.name() == 'cpu' and torch.cuda.is_available():
+                # incase the distributor is launched on cpu but gpu is available
+                torch.cuda.set_device(self.fabric.local_rank)
+
             try:
                 import cupy as cp
                 try:
