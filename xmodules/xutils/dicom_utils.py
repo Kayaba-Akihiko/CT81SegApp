@@ -169,6 +169,7 @@ class DicomUtils:
         if len(required_tag) == 0:
             return ret
 
+        print(slices[0])
         tag_res = {}
         for tag in required_tag:
             if hasattr(slices[0], tag):
