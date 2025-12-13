@@ -255,14 +255,14 @@ class ReportGenerator:
         )
         means, stds = age_sex_hu_df['mean', 'std'].to_numpy().astype(np.float64).T
         xlim = figure_utils.compute_lim(
-            np.concatenate(
+            np.concatenate([
                 means,
                 means - stds,
                 means + stds,
                 class_mean_hus[
                     np.asarray(list(all_visual_class_ids), dtype=np.int64)
                 ]
-            ),
+            ]),
             pad_ratio=0.05
         )
         del means, stds, all_visual_class_ids
