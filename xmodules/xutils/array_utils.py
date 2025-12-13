@@ -536,7 +536,7 @@ class ArrayUtils:
             with device_context:
                 array = cp.asarray(array, dtype)
         else:
-            with device_context:
+            if device_id is not None:
                 array = cp.asarray(array, dtype)
         return array
 
@@ -1526,6 +1526,37 @@ class ArrayUtils:
                 f"Unsupported array type: {type(array)}. "
             )
 
+    @classmethod
+    def concatenate[T: TypeArrayLike[NPGeneric]](
+            cls,
+            arrays: Union[List[T], Tuple[T, ...]], axis: int = 0
+    ) -> T:
+        if not isinstance(arrays, (list, tuple)):
+            raise TypeError(f"Expected list or tuple, got {type(arrays)}.")
+        if len(arrays) == 0:
+            raise ValueError("Cannot concatenate empty list of arrays.")
+        if len(arrays) == 1:
+            return arrays[0]
+        array0 = arrays[0]
+        if isinstance(array0, np.ndarray):
+            to_array_fn = cls.to_numpy
+            cat_fn = functools.partial(np.concatenate, axis=axis)
+        elif HAS_CUPY and isinstance(array0, cp.ndarray):
+            to_array_fn = functools.partial(cls.to_cupy, device=array0.device)
+            cat_fn = functools.partial(cp.concatenate, axis=axis)
+        elif HAS_TORCH and isinstance(array0, torch.Tensor):
+            to_array_fn = functools.partial(cls.to_torch, device=array0.device)
+            cat_fn = functools.partial(torch.cat, dim=axis)
+        else:
+            raise TypeError(
+                f"Unsupported array type: {type(array0)}. "
+                "Expected one of: np.ndarray, torch.Tensor, cp.ndarray."
+            )
+        arrays = map(to_array_fn, arrays)
+        return cat_fn(arrays)
+
+
+
 if not HAS_CUPY:
     def cupy_not_available(*args, **kwargs):
         raise RuntimeError("cupy is not available.")
@@ -1582,3 +1613,4 @@ expand_dims = ArrayUtils.expand_dims
 squeeze = ArrayUtils.squeeze
 einsum = ArrayUtils.einsum
 flip = ArrayUtils.flip
+concatenate = ArrayUtils.concatenate

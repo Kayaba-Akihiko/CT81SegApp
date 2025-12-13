@@ -88,6 +88,7 @@ class Inferencer:
             batch_size: int = 1,
             process_dtype: Literal['float32', 'float64'] = 'float32',
             prepro_device: Literal['cpu', 'cuda', 'auto'] = 'auto',
+            out_device: Literal['cpu', 'cuda'] = 'cpu',
             progress_bar=True,
             progress_desc: str = '',
     ):
@@ -118,7 +119,6 @@ class Inferencer:
                     shape=_x.shape,
                     buffer_ptr=_x.ctypes.data,
                 )
-
             to_array = xp.to_numpy
             empty_fn = np.empty
             argmax_fn = np.argmax
@@ -158,7 +158,23 @@ class Inferencer:
         model_H, model_W = model_out_shape[-2:]
 
         n_samples, H, W = image.shape
-        pred_labelmap = np.empty((n_samples, H, W), dtype=np.int16)
+        if out_device == 'cpu':
+            pred_labelmap = np.empty(
+                (n_samples, H, W), dtype=np.uint8)
+            out_labelmap_to_array_fn = xp.to_numpy
+        elif out_device == 'cuda':
+            if xp.HAS_CUPY and xp.CUPY_CUDA_AVAILABLE:
+                pred_labelmap = cp.empty(
+                    (n_samples, H, W), dtype=np.uint8)
+                out_labelmap_to_array_fn = xp.to_cupy
+            elif xp.HAS_TORCH:
+                pred_labelmap = xp.empty(
+                    (n_samples, H, W), dtype=np.uint8, backend='torch')
+                out_labelmap_to_array_fn = functools.partial(xp.to_torch, device='cuda')
+            else:
+                raise RuntimeError('Neither CUPY nor PyTorch is available.')
+        else:
+            raise ValueError(f'Unknown device {out_device}')
         n_batches = (n_samples + batch_size - 1) // batch_size
 
         if (H, W) != (model_H, model_W):
@@ -181,11 +197,6 @@ class Inferencer:
         iterator = range(n_batches)
         if progress_bar:
             iterator = tqdm(iterator, desc=progress_desc, total=n_batches)
-
-        hu_sums = xp.zeros(
-            (n_classes,), dtype=np.float64, backend='numpy')
-        class_counts = xp.zeros(
-            (n_classes,), dtype=np.int64, backend='numpy')
 
         for i in iterator:
             start = i * batch_size
@@ -211,9 +222,9 @@ class Inferencer:
 
             # (B, C, H, W)
             pred_logits = restore_fn(pred_logits)
-            pred_labelmap[start: end] = xp.to_numpy(
-                argmax_fn(pred_logits, axis=1), dtype=np.int16
+            pred_labelmap[start: end] = out_labelmap_to_array_fn(
+                argmax_fn(pred_logits, axis=1), dtype=np.uint8
             )
 
-        return pred_labelmap, hu_sums, class_counts
+        return pred_labelmap
 
