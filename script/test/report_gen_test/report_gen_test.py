@@ -50,9 +50,9 @@ def main():
 
     total_exec_time = 0
     for i in range(11):
-        time_start = time.perf_counter()
         ct_image_ = xp.to_cupy(ct_image)
         labelmap_ = xp.to_cupy(labelmap)
+        time_start = time.perf_counter()
         _calculate_mean_hu(ct_image_, xp.to_cupy(labelmap_))
         exec_time = time.perf_counter() - time_start
         del ct_image_, labelmap_
