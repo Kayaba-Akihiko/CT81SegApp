@@ -137,13 +137,13 @@ class FigureUtils:
                     xmax = _xmax
                 del _xmin, _xmax
             del xs
-        if xmin is not None:
+        if xmin is not None and xmax is not None:
+            ax.set_xlim(xmin, xmax)
+            ax.set_xticks(np.linspace(xmin, xmax, 6))
+        elif xmin is not None:
             ax.set_xlim(left=xmin)
         elif xmax is not None:
             ax.set_xlim(right=xmax)
-
-        if xmin is not None and xmax is not None:
-            ax.set_xticks(np.linspace(xmin, xmax, 6))
 
         ax.set_xticklabels([])
 
