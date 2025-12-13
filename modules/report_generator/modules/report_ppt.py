@@ -336,7 +336,8 @@ class ReportPPT:
                 self.presentation.save(pptx_save_path)
 
         if pdf_save_path or image_save_path is not None:
-            with tempfile.TemporaryDirectory(prefix="lo_") as temp_dir_name:
+            # In memory temp file
+            with tempfile.TemporaryDirectory(dir="/dev/shm", prefix="lo_") as temp_dir_name:
                 temp_dir = Path(temp_dir_name)
                 if pptx_save_path is not None:
                     temp_pptx_path = pptx_save_path
