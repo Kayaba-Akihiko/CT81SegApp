@@ -346,7 +346,7 @@ class ReportGenerator:
             ppt_image_dict[ppt_image_key] = box_figure
             del box_drawing_data, box_figure
         low_target_ratio = sum(class_low_target_table.values()) / sum(
-            len(v.class_id) for v in self._class_groups.values() if v is not None)
+            len(v.class_ids) for v in self._class_groups.values() if v is not None)
         # Determine observation
         if low_target_ratio >= 0.5:
             observation = self._observation_messages[3]
@@ -444,7 +444,7 @@ class ReportGenerator:
             patient_info: Optional[PatientInfoData] = None,
             observation_message: Optional[str] = None,
             default_str: str = '-'
-    ):
+    ) -> Dict[str, str]:
         if patient_info is None:
             patient_info = PatientInfoData()
         placeholders = {
@@ -463,6 +463,8 @@ class ReportGenerator:
         for k, v in placeholders:
             if v is None:
                 placeholders[k] = default_str
+            else:
+                placeholders[k] = str(v)
         return placeholders
 
     @staticmethod
