@@ -6,8 +6,7 @@
 #  without the express permission of Yi GU.
 
 
-from typing import Sequence, Any, Optional, Union, Tuple, List
-from pathlib import Path
+from typing import Sequence, Any, Optional, Union, Tuple, List, TypeAlias
 import logging
 
 import pydicom
@@ -19,6 +18,8 @@ import numpy.typing as npt
 from . import os_utils, multiprocessing_utils
 from ..protocol import TypePathLike
 
+TypeTagKey: TypeAlias = Union[str, Tuple[int, int]]
+
 _logger = logging.getLogger(__name__)
 
 
@@ -26,7 +27,8 @@ class DicomUtils:
 
     @staticmethod
     def read_dicom_file(
-            read_path: TypePathLike, required_tag: Optional[str | Sequence[str]] = None,
+            read_path: TypePathLike,
+            required_tag: Optional[Union[TypeTagKey, Sequence[TypeTagKey]]] = None,
     ) -> tuple[
              npt.NDArray,
              npt.NDArray[np.double],
@@ -37,6 +39,8 @@ class DicomUtils:
              Union[npt.NDArray[np.double], None],
              Any,
          ]:
+        if os_utils.is_path_like(read_path):
+            read_path = os_utils.format_path_string(read_path)
         dcfile = pydicom.dcmread(read_path)
         spacing = np.asarray(dcfile.PixelSpacing, dtype=np.float64)
 
@@ -59,10 +63,7 @@ class DicomUtils:
 
         tag_res = {}
         for tag in required_tag:
-            if hasattr(dcfile, tag):
-                tag_res[tag] = getattr(dcfile, tag)
-            else:
-                tag_res[tag] = None
+            tag_res[tag] = dcfile.get(tag, default=None)
         if len(tag_res) == 1:
             tag_res = tag_res[required_tag[0]]
         return ret[0], ret[1], ret[2], tag_res
@@ -72,7 +73,7 @@ class DicomUtils:
             cls,
             read_path: TypePathLike,
             name_regex='.*\\.dcm$',
-            required_tag: Optional[str | Sequence[str]] = None,
+            required_tag: Optional[Union[TypeTagKey, Sequence[TypeTagKey]]] = None,
             n_workers: int = 0,
             progress_bar=True,
             progress_desc='',
@@ -171,10 +172,7 @@ class DicomUtils:
 
         tag_res = {}
         for tag in required_tag:
-            if hasattr(slices[0], tag):
-                tag_res[tag] = getattr(slices[0], tag).value
-            else:
-                tag_res[tag] = None
+            tag_res[tag] = slices[0].get(tag, default=None)
         if len(tag_res) == 1:
             tag_res = tag_res[required_tag[0]]
 
@@ -232,6 +230,8 @@ class DicomUtils:
             allow_invalid: bool = False,
     ) -> Union[pydicom.FileDataset, None]:
         try:
+            if os_utils.is_path_like(_read_path):
+                _read_path = os_utils.format_path_string(_read_path)
             _file = pydicom.dcmread(_read_path)
         except pydicom.errors.InvalidDicomError as e:
             if not allow_invalid:
