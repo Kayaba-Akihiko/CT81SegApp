@@ -460,7 +460,7 @@ class ReportGenerator:
             'SHOOTING_DAY': patient_info.shooting_day,
             'OBSERVATIONS': observation_message,
         }
-        for k, v in placeholders:
+        for k, v in placeholders.items():
             if v is None:
                 placeholders[k] = default_str
             else:
