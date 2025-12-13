@@ -213,20 +213,9 @@ class ReportGenerator:
             labelmap: npt.NDArray[np.integer],
             spacing: npt.NDArray[np.float64],
             class_mean_hus: npt.NDArray[np.float64],
-            pptx_save_path: Optional[Union[TypePathLike, IO]] = None,
-            pdf_save_path: Optional[TypePathLike] = None,
-            image_save_path: Optional[Union[TypePathLike, IO]] = None,
             fig_dpi=96,
             device='cpu',
-    ):
-        if pptx_save_path is None and pdf_save_path is None and image_save_path is None:
-            raise ValueError('One path must be specified.')
-        if pptx_save_path is not None and os_utils.is_path_like(pptx_save_path):
-                pptx_save_path = os_utils.format_path_string(pptx_save_path)
-        if pdf_save_path is not None:
-            pdf_save_path = os_utils.format_path_string(pdf_save_path)
-        if image_save_path is not None and os_utils.is_path_like(image_save_path):
-            image_save_path = os_utils.format_path_string(image_save_path)
+    ) -> ReportPPT:
 
         if labelmap.ndim != 3:
             raise ValueError('Labelmap must be 3D')
@@ -459,11 +448,7 @@ class ReportGenerator:
             del fill_data
         del ppt_image_dict, fit_mode
         report_ppt.fill_images(fill_images)
-        report_ppt.save(
-            pptx_save_path=pptx_save_path,
-            pdf_save_path=pdf_save_path,
-            image_save_path=image_save_path,
-        )
+        return report_ppt
 
     @staticmethod
     def _build_text_placeholders(
@@ -474,6 +459,7 @@ class ReportGenerator:
     ) -> Dict[str, str]:
         if patient_info is None:
             patient_info = PatientInfoData()
+        print(patient_info)
         language = language.lower()
 
         placeholders = {

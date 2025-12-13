@@ -47,7 +47,7 @@ def main():
         class_info_table=class_table_path,
         class_groups=class_groups_path,
     )
-    report_generator.generate(
+    report_ppt = report_generator.generate(
         patient_info={
             'name': 'Taro',
             'sex': sex,
@@ -56,10 +56,13 @@ def main():
         labelmap=labelmap,
         spacing=spacing,
         class_mean_hus=mean_hus,
+
+        device='cuda',
+    )
+    report_ppt.save(
         pptx_save_path=output_dir / 'report.pptx',
         pdf_save_path=output_dir / 'report.pdf',
         image_save_path=output_dir / 'report.png',
-        device='cuda',
     )
 
 

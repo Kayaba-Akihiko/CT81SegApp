@@ -14,6 +14,7 @@ import logging
 import tempfile
 import subprocess
 import shutil
+import imageio.v3 as iio
 
 import numpy as np
 import numpy.typing as npt
@@ -29,7 +30,9 @@ from pptx.slide import (
     SlideShapes as PPTXSlideShapes
 )
 from pptx import Presentation as create_presentation
-import imageio.v3 as iio
+
+from xmodules.xutils import os_utils
+from xmodules.typing import TypePathLike
 
 TypeFitMode: TypeAlias = Literal[
     'contain', 'cover', 'match_height', 'match_width']
@@ -217,122 +220,23 @@ class ReportPPT:
 
         return res
 
-    # def collect_shape_sizes(
-    #         self, dpi: int = 96
-    # ) -> Dict[str, Tuple[int, int]]:
-    #     sizes: Dict[str, Tuple[int, int]] = {}
-    #     for slide in self.presentation.slides:
-    #         for shape in self._iter_shapes(slide.shapes):
-    #             name = getattr(shape, 'name', '') or ''
-    #             if 'IMG:' not in name:
-    #                 continue
-    #
-    #             key = name.split('IMG:', 1)[1].strip()
-    #             if not key:
-    #                 continue
-    #             w_px = self._emu_to_px(shape.width, dpi)
-    #             h_px = self._emu_to_px(shape.height, dpi)
-    #             sizes[key] = (w_px, h_px)
-    #
-    #     return sizes
-    #
-    # def fill_images(
-    #         self,
-    #         images: Dict[str, FillImageData],
-    # ) -> Dict[str, PPTXPicture]:
-    #     res: Dict[str, PPTXPicture] = {}
-    #     finished_key = set()
-    #     for slide in self.presentation.slides:
-    #         for shape in self._iter_shapes(slide.shapes):
-    #             name = getattr(shape, 'name', '') or ''
-    #             if 'IMG:' not in name:
-    #                 continue
-    #
-    #             key = name.split('IMG:', 1)[1].strip()
-    #             if not key or key not in images:
-    #                 continue
-    #             fill_image_data = images[key]
-    #             if fill_image_data.image is None:
-    #                 raise ValueError(f'Image not found: {key}')
-    #             pic = self._fit_image_into_slide(
-    #                 slide, fill_image_data.image,
-    #                 (shape.left, shape.top, shape.width, shape.height),
-    #                 fill_image_data.fill_mode
-    #             )
-    #
-    #             if fill_image_data.send_to_back:
-    #                 el = pic._element
-    #                 parent = el.getparent()
-    #                 parent.remove(el)
-    #                 parent.insert(2, el)
-    #
-    #             res[key] = pic
-    #             finished_key.add(key)
-    #     unknown_filling_keys = set(images.keys()) - finished_key
-    #     if unknown_filling_keys:
-    #         _logger.warning(
-    #             f'Unknown filling keys: {unknown_filling_keys}')
-    #     return res
-    #
-    # def fill_texts(self, mapping: dict[str, str]) -> Dict[str, PPTXRun]:
-    #     tokens = {f'{{{{{k}}}}}': str(v) for k, v in mapping.items()}
-    #
-    #     finished_key = set()
-    #     res: Dict[str, PPTXRun] = {}
-    #     for slide in self.presentation.slides:
-    #         for shape in self._iter_shapes(slide.shapes):
-    #             if getattr(shape, 'has_text_frame', False) and shape.has_text_frame:
-    #                 for p in shape.text_frame.paragraphs:
-    #                     for r in p.runs:
-    #                         text = r.text
-    #                         for (tk, val), check_key in zip(tokens.items(), mapping):
-    #                             if tk in text:
-    #                                 text = text.replace(tk, val)
-    #                                 res[check_key] = r
-    #                                 finished_key.add(check_key)
-    #                         if text != r.text:
-    #                             r.text = text
-    #
-    #             if getattr(shape, 'has_table', False) and shape.has_table:
-    #                 tbl = shape.table
-    #                 for r_i in range(len(tbl.rows)):
-    #                     for c_i in range(len(tbl.columns)):
-    #                         cell = tbl.cell(r_i, c_i)
-    #                         tf = getattr(cell, 'text_frame', None)
-    #                         if tf is None:
-    #                             continue
-    #                         for p in tf.paragraphs:
-    #                             for r in p.runs:
-    #                                 text = r.text
-    #                                 for (tk, val), check_key in zip(tokens.items(), mapping):
-    #                                     if tk in text:
-    #                                         text = text.replace(tk, val)
-    #                                         res[check_key] = r
-    #                                         finished_key.add(check_key)
-    #                                 if text != r.text:
-    #                                     r.text = text
-    #     unknown_filling_keys = set(mapping.keys()) - finished_key
-    #     if unknown_filling_keys:
-    #         _logger.warning(
-    #             f'Unknown filling keys: {unknown_filling_keys}')
-    #     return res
-
     def save(
             self,
-            pptx_save_path: Optional[Union[Path, IO]] = None,
-            pdf_save_path: Optional[Path] = None,
-            image_save_path: Optional[Union[Path, IO]] = None,
+            pptx_save_path: Optional[Union[TypePathLike, IO]] = None,
+            pdf_save_path: Optional[TypePathLike] = None,
+            image_save_path: Optional[Union[TypePathLike, IO]] = None,
             dpi=200,  # Used for when saving as image
     ):
         if not pptx_save_path and not pdf_save_path and not image_save_path:
             raise ValueError('One path must be specified.')
 
         if pptx_save_path is not None:
-            # If caller passes an IO, python-pptx can save to it directly.
-            if isinstance(pptx_save_path, Path):
+            if os_utils.is_path_like(pptx_save_path):
+                pptx_save_path = os_utils.format_path_string(pptx_save_path)
                 pptx_save_path.parent.mkdir(parents=True, exist_ok=True)
                 self.presentation.save(str(pptx_save_path))
             else:
+                # If caller passes an IO, python-pptx can save to it directly.
                 self.presentation.save(pptx_save_path)
 
         if pdf_save_path or image_save_path is not None:
@@ -379,6 +283,7 @@ class ReportPPT:
                     raise RuntimeError(f"LibreOffice reported success but PDF not found: {temp_pdf_path}")
 
                 if pdf_save_path is not None:
+                    pdf_save_path = os_utils.format_path_string(pdf_save_path)
                     pdf_save_path.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(temp_pdf_path, pdf_save_path)
 
@@ -386,10 +291,13 @@ class ReportPPT:
                     # Requires poppler installed for pdf2image on Linux:
                     # sudo apt-get install -y poppler-utils
                     from pdf2image import convert_from_path
-
                     pages = convert_from_path(str(temp_pdf_path), dpi=dpi)
-                    # If image_save_path is a Path, save to it; if it's a file-like object, PIL can write to it too.
-                    pages[0].save(str(image_save_path) if isinstance(image_save_path, Path) else image_save_path)
+
+                    if os_utils.is_path_like(image_save_path):
+                        image_save_path = os_utils.format_path_string(image_save_path)
+                        image_save_path.parent.mkdir(parents=True, exist_ok=True)
+                    pages[0].save(image_save_path)
+
 
     @classmethod
     def _iter_shapes(cls, shapes: PPTXSlideShapes):
