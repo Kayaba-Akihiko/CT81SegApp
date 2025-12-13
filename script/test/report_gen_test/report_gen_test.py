@@ -102,10 +102,10 @@ def _calculate_mean_hu(
     image = image.astype(np.float32)
     for class_id in range(n_classes):
         mask = labelmap == class_id
-        if not np.any(mask):
+        if not mask.any():
             res.append(None)
             continue
-        res.append(np.mean(image[mask]))
+        res.append(image[mask].mean())
     return res
 
 
