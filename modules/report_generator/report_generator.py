@@ -324,7 +324,7 @@ class ReportGenerator:
                 del class_df
 
                 target = float(class_mean_hus[class_id])
-                if np.isfinite(mean) and np.isfinite(std) and np.isfinite(std) and target < mean - std:
+                if np.isfinite(mean) and np.isfinite(std) and np.isfinite(target) and target < mean - std:
                     class_low_target_table[class_id] = 1
                 else:
                     class_low_target_table[class_id] = 0
@@ -354,6 +354,7 @@ class ReportGenerator:
         else:
             observation = self._observation_messages[1]
         print(low_target_ratio)
+        print(json.dumps(class_low_target_table, indent=2))
         del low_target_ratio, class_low_target_table
         report_ppt.fill_texts(self._build_text_placeholders(patient_info, observation))
         del observation
