@@ -324,7 +324,7 @@ class ReportGenerator:
                 del class_df
 
                 target = float(class_mean_hus[class_id])
-                if np.isfinite(mean) and np.isfinite(std) and target < mean - std:
+                if np.isfinite(mean) and np.isfinite(std) and np.isfinite(std) and target < mean - std:
                     class_low_target_table[class_id] = 1
                 else:
                     class_low_target_table[class_id] = 0
@@ -345,8 +345,7 @@ class ReportGenerator:
             )
             ppt_image_dict[ppt_image_key] = box_figure
             del box_drawing_data, box_figure
-        low_target_ratio = sum(class_low_target_table.values()) / sum(
-            len(v.class_ids) for v in self._class_groups.values() if v is not None)
+        low_target_ratio = sum(class_low_target_table.values()) / len(class_low_target_table)
         # Determine observation
         if low_target_ratio >= 0.5:
             observation = self._observation_messages[3]
@@ -354,6 +353,7 @@ class ReportGenerator:
             observation = self._observation_messages[2]
         else:
             observation = self._observation_messages[1]
+        print(low_target_ratio)
         del low_target_ratio, class_low_target_table
         report_ppt.fill_texts(self._build_text_placeholders(patient_info, observation))
         del observation
