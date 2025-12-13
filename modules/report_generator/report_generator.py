@@ -266,6 +266,7 @@ class ReportGenerator:
             pad_ratio=0.12
         )
         del means, stds, all_visual_class_ids
+        print(xlim)
 
         def _mix_gaussians(_means, _vars, _weights=None):
             _means = np.asarray(_means, dtype=np.float64)
