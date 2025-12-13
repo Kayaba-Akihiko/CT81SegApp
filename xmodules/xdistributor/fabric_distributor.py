@@ -102,7 +102,7 @@ class FabricDistributor(BaseDistributor):
             raise NotImplementedError(strategy)
         _logger.info(f'Using strategy {strategy}.')
 
-    def _launch(self) -> None:
+    def _backend_launch(self) -> None:
         self.fabric.launch()
         _logger.info('Running fabric.')
         self.global_rank = self.fabric.global_rank
