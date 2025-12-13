@@ -17,7 +17,8 @@ import numpy as np
 import numpy.typing as npt
 import polars as pl
 
-from xmodules.xutils import vtk_utils
+from xmodules.xutils import vtk_utils, os_utils
+from xmodules.typing import TypePathLike
 
 from .modules.report_ppt import ReportPPT, PPTXPresentation, FillImageData as ReportFillImageData, TypeFitMode as TypeReportFitMode
 from .modules.labelmap_renderer import LabelmapRenderer
@@ -81,26 +82,29 @@ class ReportGenerator:
 
     def __init__(
             self,
-            template_ppt: Union[PPTXPresentation, Path],
-            hu_statistics_table: Union[pl.DataFrame, Path],
-            rendering_config: Union[Dict[str, Any], Path],
-            class_info_table: Union[pl.DataFrame, Path],
+            template_ppt: Union[PPTXPresentation, TypePathLike],
+            hu_statistics_table: Union[pl.DataFrame, TypePathLike],
+            rendering_config: Union[Dict[str, Any], TypePathLike],
+            class_info_table: Union[pl.DataFrame, TypePathLike],
             class_groups: Union[
                 List[Union[ClassGroupData, Dict[str, Any]]],
                 Tuple[Union[ClassGroupData, Dict[str, Any]], ...],
-                Path,
+                TypePathLike,
             ]
     ):
+        if isinstance(template_ppt, TypePathLike):
+            template_ppt = os_utils.format_path_string(template_ppt)
         self._report_ppt = ReportPPT(template_ppt)
-        if isinstance(hu_statistics_table, Path):
-            self._hu_statistics_df = self._read_dataframe(hu_statistics_table)
+        if isinstance(hu_statistics_table, TypePathLike):
+            self._hu_statistics_df = self._read_dataframe(
+                os_utils.format_path_string(hu_statistics_table))
         else:
             if not isinstance(hu_statistics_table, pl.DataFrame):
                 raise ValueError(f'Invalid hu statistics table: {hu_statistics_table}')
             self._hu_statistics_df = hu_statistics_table.clone()
 
         if isinstance(rendering_config, Path):
-            with rendering_config.open('rb') as f:
+            with os_utils.format_path_string(rendering_config).open('rb') as f:
                 rendering_config = json.load(f)
         elif isinstance(rendering_config, dict):
             rendering_config = copy.deepcopy(rendering_config)
@@ -109,8 +113,9 @@ class ReportGenerator:
         self._skin_class_id = rendering_config.pop('skin_class_id')
         self._rendering_config = rendering_config
 
-        if isinstance(class_info_table, Path):
-            self._class_info_df = self._read_dataframe(class_info_table)
+        if isinstance(class_info_table, TypePathLike):
+            self._class_info_df = self._read_dataframe(
+                os_utils.format_path_string(class_info_table))
         else:
             if not isinstance(class_info_table, pl.DataFrame):
                 raise ValueError(f'Invalid class info table: {class_info_table}')
@@ -205,14 +210,20 @@ class ReportGenerator:
             labelmap: npt.NDArray[np.integer],
             spacing: npt.NDArray[np.float64],
             class_mean_hus: npt.NDArray[np.float64],
-            pptx_save_path: Optional[Union[Path, IO]] = None,
-            pdf_save_path: Optional[Path] = None,
-            image_save_path: Optional[Union[Path, IO]] = None,
+            pptx_save_path: Optional[Union[TypePathLike, IO]] = None,
+            pdf_save_path: Optional[TypePathLike] = None,
+            image_save_path: Optional[Union[TypePathLike, IO]] = None,
             fig_dpi=96,
             device='cpu',
     ):
         if pptx_save_path is None and pdf_save_path is None and image_save_path is None:
             raise ValueError('One path must be specified.')
+        if pptx_save_path is not None and isinstance(pptx_save_path, TypePathLike):
+            pptx_save_path = os_utils.format_path_string(pptx_save_path)
+        if pdf_save_path is not None:
+            pdf_save_path = os_utils.format_path_string(pdf_save_path)
+        if image_save_path is not None and isinstance(image_save_path, TypePathLike):
+            image_save_path = os_utils.format_path_string(image_save_path)
 
         if labelmap.ndim != 3:
             raise ValueError('Labelmap must be 3D')

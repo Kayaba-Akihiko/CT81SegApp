@@ -10,6 +10,6 @@ from pathlib import Path
 import os
 
 AnyStr: TypeAlias = Union[bytes, str]
-TypePathLike: TypeAlias = Union[Union[AnyStr, os.PathLike[AnyStr]], Path]
+TypePathLike: TypeAlias = Union[AnyStr, os.PathLike[AnyStr], Path]
 
 TypeConfig: TypeAlias = Dict[str, Any]

@@ -30,9 +30,6 @@ from pptx.slide import (
 from pptx import Presentation as create_presentation
 import imageio.v3 as iio
 
-from xmodules.xutils import os_utils
-from xmodules.typing import TypePathLike
-
 TypeFitMode: TypeAlias = Literal[
     'contain', 'cover', 'match_height', 'match_width']
 
@@ -173,6 +170,7 @@ class ReportPPT:
             pptx_save_path: Optional[Union[Path, IO]] = None,
             pdf_save_path: Optional[Path] = None,
             image_save_path: Optional[Union[Path, IO]] = None,
+            dpi=200,  # Used for when saving as image
     ):
         if not pptx_save_path and not pdf_save_path and not image_save_path:
             raise ValueError('One path must be specified.')
@@ -228,7 +226,7 @@ class ReportPPT:
                     # sudo apt-get install -y poppler-utils
                     from pdf2image import convert_from_path
 
-                    pages = convert_from_path(str(temp_pdf_path), dpi=200)
+                    pages = convert_from_path(str(temp_pdf_path), dpi=dpi)
                     # If image_save_path is a Path, save to it; if it's a file-like object, PIL can write to it too.
                     pages[0].save(str(image_save_path) if isinstance(image_save_path, Path) else image_save_path)
 

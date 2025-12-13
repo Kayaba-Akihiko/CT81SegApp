@@ -8,7 +8,7 @@
 import functools
 import os
 import shutil
-from typing import Callable, Iterable, Union, List, Tuple, Optional, Sequence
+from typing import Callable, Iterable, Union, List, Tuple, Optional
 
 from ..protocol import TypePathLike
 from pathlib import Path
