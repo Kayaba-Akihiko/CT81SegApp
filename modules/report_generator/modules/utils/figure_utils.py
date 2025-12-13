@@ -10,6 +10,7 @@ from dataclasses import dataclass
 import io
 
 import numpy as np
+import numpy.typing as npt
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -28,10 +29,35 @@ class BoxDrawingData:
 class FigureUtils:
 
     @staticmethod
+    def compute_lim(
+            array: Union[
+                Tuple[Union[float, int]],
+                List[Union[float, int]],
+                npt.NDArray[Union[np.floating, np.integer]],
+            ],
+            pad_ratio: float = 0
+    ):
+        if pad_ratio < 0:
+            raise ValueError(f'pad_ratio must be non-negative: {pad_ratio}')
+        array = np.asarray(array).flatten()
+        valid = np.isfinite(array)
+        if not valid.any():
+            return None, None
+        valid_array = array[valid]
+        min_val, max_val = valid_array.min(), valid_array.max()
+        if pad_ratio == 0:
+            return min_val, max_val
+        span = max_val - min_val
+        pad = span * float(pad_ratio)
+        return min_val - pad, max_val + pad
+
+
+    @classmethod
     def draw_hu_boxes(
+            cls,
             boxes: List[BoxDrawingData],
             canvas_size_px: Optional[Tuple[int, int]]  = None,
-            xlim: Optional[Tuple[float, float]] = None,
+            xlim: Optional[Tuple[Union[float, None], Union[float, None]]] = None,
             s_star: float = 400.0,
             box_height_px: int = 14,
             row_gap_px: int = 8,
@@ -92,26 +118,33 @@ class FigureUtils:
             y_centers = None
 
         # ---- X limits (data-driven, includes boxes + stars) ----
+
         if xlim is None:
+            xmin, xmax = None, None
+        else:
+            xmin, xmax = xlim
+
+        if xmin is None or xmax is None:
             xs = []
             for b in boxes:
-                if not getattr(b, "visible", True):
+                if not b.visible:
                     continue
-                if _is_valid_number(b.mean) and _is_valid_number(b.std) and float(b.std) > 0:
-                    m, s = float(b.mean), float(b.std)
-                    xs.extend([m - s, m + s])
-                if _is_valid_number(b.target):
-                    xs.append(float(b.target))
-
+                xs.extend([b.mean, b.mean + b.std, b.mean - b.std, b.target])
             if xs:
-                xmin, xmax = min(xs), max(xs)
-                rng = max(1e-6, xmax - xmin)
-                pad = 0.05 * rng
-                ax.set_xlim(xmin - pad, xmax + pad)
-                ax.set_xticks(np.linspace(xmin, xmax, 6))
-        else:
-            ax.set_xlim(float(xlim[0]), float(xlim[1]))
-            ax.set_xticks(np.linspace(xlim[0], xlim[1], 6))
+                _xmin, _xmax = cls.compute_lim(xs)
+                if xmin is None:
+                    xmin = _xmin
+                if xmax is None:
+                    xmax = _xmax
+                del _xmin, _xmax
+            del xs
+        if xmin is not None:
+            ax.set_xlim(left=xmin)
+        elif xmax is not None:
+            ax.set_xlim(right=xmax)
+
+        if xmin is not None and xmax is not None:
+            ax.set_xticks(np.linspace(xmin, xmax, 6))
 
         ax.set_xticklabels([])
 

@@ -312,8 +312,8 @@ class ReportGenerator:
             occlusion_ratio=self._rendering_config.get('occlusion_ratio', None),
         )
 
-        front_view = labelmap_renderer.render(
-            view="front",
+        front_view, back_view = labelmap_renderer.render(
+            view=['front', 'back'],
             class_color_table=self._class_color_table,
             camera_offset=2500.0,
             shade=self._rendering_config.get('shade', None),
@@ -325,8 +325,7 @@ class ReportGenerator:
             blend_mode=self._rendering_config.get('blend_mode', None),
             device=device,
         )
-        back_view = front_view
-        # '11' '12' full lable view
+        # '11' '12' full label view
         ppt_image_dict['11'] = front_view
         ppt_image_dict['12'] = back_view
         del front_view, back_view
