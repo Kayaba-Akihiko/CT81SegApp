@@ -8,7 +8,7 @@
 
 from typing import IO, Self, Tuple, Optional, Union, Dict, Any, TypeAlias, Literal, Type, TypeVar, Protocol, List, Sequence
 from pathlib import Path
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 import json
 import copy
 from dataclasses import dataclass, fields
@@ -92,33 +92,29 @@ class ReportGenerator:
                 TypePathLike,
             ]
     ):
-        if isinstance(template_ppt, TypePathLike):
+        if not isinstance(template_ppt, PPTXPresentation):
             template_ppt = os_utils.format_path_string(template_ppt)
         self._report_ppt = ReportPPT(template_ppt)
-        if isinstance(hu_statistics_table, TypePathLike):
+
+        if not isinstance(hu_statistics_table, pl.DataFrame):
             self._hu_statistics_df = self._read_dataframe(
                 os_utils.format_path_string(hu_statistics_table))
         else:
-            if not isinstance(hu_statistics_table, pl.DataFrame):
-                raise ValueError(f'Invalid hu statistics table: {hu_statistics_table}')
             self._hu_statistics_df = hu_statistics_table.clone()
 
-        if isinstance(rendering_config, Path):
+        if not isinstance(rendering_config, dict):
             with os_utils.format_path_string(rendering_config).open('rb') as f:
                 rendering_config = json.load(f)
-        elif isinstance(rendering_config, dict):
-            rendering_config = copy.deepcopy(rendering_config)
         else:
-            raise ValueError(f'Invalid rendering config: {rendering_config}')
+            rendering_config = copy.deepcopy(rendering_config)
+
         self._skin_class_id = rendering_config.pop('skin_class_id')
         self._rendering_config = rendering_config
 
-        if isinstance(class_info_table, TypePathLike):
+        if not isinstance(class_info_table, pl.DataFrame):
             self._class_info_df = self._read_dataframe(
                 os_utils.format_path_string(class_info_table))
         else:
-            if not isinstance(class_info_table, pl.DataFrame):
-                raise ValueError(f'Invalid class info table: {class_info_table}')
             self._class_info_df = class_info_table.clone()
 
         color_table = OrderedDict()
@@ -218,12 +214,14 @@ class ReportGenerator:
     ):
         if pptx_save_path is None and pdf_save_path is None and image_save_path is None:
             raise ValueError('One path must be specified.')
-        if pptx_save_path is not None and isinstance(pptx_save_path, TypePathLike):
-            pptx_save_path = os_utils.format_path_string(pptx_save_path)
+        if pptx_save_path is not None:
+            if not isinstance(pptx_save_path, IO):
+                pptx_save_path = os_utils.format_path_string(pptx_save_path)
         if pdf_save_path is not None:
             pdf_save_path = os_utils.format_path_string(pdf_save_path)
-        if image_save_path is not None and isinstance(image_save_path, TypePathLike):
-            image_save_path = os_utils.format_path_string(image_save_path)
+        if image_save_path is not None:
+            if not isinstance(image_save_path, IO):
+                image_save_path = os_utils.format_path_string(image_save_path)
 
         if labelmap.ndim != 3:
             raise ValueError('Labelmap must be 3D')
