@@ -170,6 +170,7 @@ class DicomUtils:
             return ret
 
         print(slices[0])
+        print(slices[0].dir("pat"))
         tag_res = {}
         for tag in required_tag:
             if hasattr(slices[0], tag):
