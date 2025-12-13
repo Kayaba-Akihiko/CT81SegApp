@@ -53,7 +53,7 @@ def main():
         ct_image_ = xp.to_cupy(ct_image)
         labelmap_ = xp.to_cupy(labelmap)
         time_start = time.perf_counter()
-        _calculate_mean_hu(ct_image_, xp.to_cupy(labelmap_))
+        _calculate_mean_hu(ct_image_, labelmap_)
         exec_time = time.perf_counter() - time_start
         del ct_image_, labelmap_
         if i == 0:
