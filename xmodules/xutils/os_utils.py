@@ -18,6 +18,10 @@ import re
 class OSUtils:
 
     @staticmethod
+    def is_path_like(obj: object) -> bool:
+        return isinstance(obj, (str, bytes, os.PathLike, Path))
+
+    @staticmethod
     @functools.lru_cache()
     def get_max_n_worker() -> int:
         max_num_worker_suggest = 0
@@ -167,6 +171,7 @@ class OSUtils:
             follow_symlinks=follow_symlinks,
         )
 
+is_path_like = OSUtils.is_path_like
 get_max_n_worker = OSUtils.get_max_n_worker
 copy = OSUtils.copy
 copyfile = OSUtils.copyfile
