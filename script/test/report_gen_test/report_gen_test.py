@@ -12,7 +12,6 @@ import time
 
 import numpy as np
 import numpy.typing as npt
-from tests.transforms.croppad.test_rand_weighted_cropd import weight
 
 from modules.report_generator.report_generator import ReportGenerator, ClassGroupData
 from xmodules.xutils import metaimage_utils, dicom_utils, array_utils as xp
