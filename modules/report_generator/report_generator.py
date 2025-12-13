@@ -360,7 +360,10 @@ class ReportGenerator:
         else:
             observation = self._observation_messages[1]
         del low_target_ratio, class_low_target_table
-        report_ppt.fill_texts(self._build_text_placeholders(patient_info, observation))
+        report_ppt.fill_texts(
+            self._build_text_placeholders(
+                patient_info, observation, language='jp')
+        )
         del observation
 
         labelmap_renderer = LabelmapRenderer(
@@ -453,10 +456,12 @@ class ReportGenerator:
             patient_info: Optional[PatientInfoData] = None,
             observation_message: Optional[str] = None,
             default_str: str = '-',
-            launguage: str = 'en'
+            language: str = 'en'
     ) -> Dict[str, str]:
         if patient_info is None:
             patient_info = PatientInfoData()
+        language = language.lower()
+
         placeholders = {
             'NAME': patient_info.name,
             'BIRTH_YEAR': patient_info.birth_year,
@@ -476,19 +481,19 @@ class ReportGenerator:
         if sex is not None:
             sex = sex.lower()
             if sex in {'m', 'male', '男'}:
-                if launguage == 'jp':
+                if language == 'jp':
                     sex = '男性'
-                elif launguage == 'en':
+                elif language == 'en':
                     sex = 'Male'
                 else:
-                    raise ValueError(f'Unsupported language: {launguage}')
+                    raise ValueError(f'Unsupported language: {language}')
             elif sex in {'f', 'female', '女'}:
-                if launguage == 'jp':
+                if language == 'jp':
                     sex = '女性'
-                elif launguage == 'en':
+                elif language == 'en':
                     sex = 'Female'
                 else:
-                    raise ValueError(f'Unsupported language: {launguage}')
+                    raise ValueError(f'Unsupported language: {language}')
         placeholders['SEX'] = sex
 
         for k, v in placeholders.items():

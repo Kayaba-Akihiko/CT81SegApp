@@ -172,7 +172,7 @@ class DicomUtils:
         tag_res = {}
         for tag in required_tag:
             if hasattr(slices[0], tag):
-                tag_res[tag] = getattr(slices[0], tag)
+                tag_res[tag] = getattr(slices[0], tag).value
             else:
                 tag_res[tag] = None
         if len(tag_res) == 1:
