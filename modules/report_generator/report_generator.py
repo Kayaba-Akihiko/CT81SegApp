@@ -260,7 +260,7 @@ class ReportGenerator:
                 means - stds,
                 means + stds,
                 class_mean_hus[
-                    np.asarray(all_visual_class_ids, dtype=np.int64)
+                    np.asarray(list(all_visual_class_ids), dtype=np.int64)
                 ]
             ),
             pad_ratio=0.05
