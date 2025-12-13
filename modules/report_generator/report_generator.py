@@ -451,6 +451,7 @@ class ReportGenerator:
             'NAME': patient_info.name,
             'SEX': patient_info.sex,
             'BIRTH_YEAR': patient_info.birth_year,
+            'BIRTH_MONTH': patient_info.birth_month,
             'BIRTH_DAY': patient_info.birth_day,
             'HEIGHT': patient_info.height,
             'WEIGHT': patient_info.weight,

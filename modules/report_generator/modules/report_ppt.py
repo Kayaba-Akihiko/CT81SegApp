@@ -135,11 +135,11 @@ class ReportPPT:
                     for p in shape.text_frame.paragraphs:
                         for r in p.runs:
                             text = r.text
-                            for tk, val in tokens.items():
+                            for (tk, val), check_key in zip(tokens.items(), mapping):
                                 if tk in text:
                                     text = text.replace(tk, val)
-                                    res[tk] = r
-                                    finished_key.add(tk)
+                                    res[check_key] = r
+                                    finished_key.add(check_key)
                             if text != r.text:
                                 r.text = text
 
@@ -154,11 +154,11 @@ class ReportPPT:
                             for p in tf.paragraphs:
                                 for r in p.runs:
                                     text = r.text
-                                    for tk, val in tokens.items():
+                                    for (tk, val), check_key in zip(tokens.items(), mapping):
                                         if tk in text:
                                             text = text.replace(tk, val)
-                                            res[tk] = r
-                                            finished_key.add(tk)
+                                            res[check_key] = r
+                                            finished_key.add(check_key)
                                     if text != r.text:
                                         r.text = text
         unknown_filling_keys = set(mapping.keys()) - finished_key
