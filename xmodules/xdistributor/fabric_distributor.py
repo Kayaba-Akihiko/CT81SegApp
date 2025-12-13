@@ -183,7 +183,7 @@ class FabricDistributor(BaseDistributor):
         return self.fabric.all_reduce(x, reduce_op=reduce_op)
 
     def all_gather(self, x: torch.Tensor) -> torch.Tensor:
-        if self.world_size < 2:
+        if not self.is_distributed():
             return x.unsqueeze(0)  # (1,)
         return self.fabric.all_gather(x)  # (ws, ...) or (...)
 

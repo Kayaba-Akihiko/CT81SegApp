@@ -42,7 +42,7 @@ class DummyDistributor(BaseDistributor):
             tracker=tracker,
             float32_matmul_precision=float32_matmul_precision,
         )
-        if accelerator not in ['auto', 'gpu', 'cpu']:
+        if accelerator not in ['auto', 'cuda', 'cpu']:
             raise ValueError(f'accelerator={accelerator} is not supported.')
 
         if devices == 'auto':

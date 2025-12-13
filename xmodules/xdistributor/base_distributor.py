@@ -156,7 +156,9 @@ class BaseDistributor(ABC, DistributorProtocol):
         return tuple(compile_fn(m) for m in module)
 
     def all_gather_object[T](self, x: T) -> List[T]:
-        if self.world_size < 2:
+        if x is None:
+            raise ValueError('No object to gather.')
+        if not self.is_distributed():
             return [x]
         out_list = [None] * self.world_size
         torch.distributed.all_gather_object(out_list, x)
@@ -164,8 +166,8 @@ class BaseDistributor(ABC, DistributorProtocol):
 
     def broadcast_object(self, *x: Any, src=0) -> Any:
         if len(x) == 0:
-            return None
-        if self.world_size < 2:
+            raise ValueError('No object to broadcast.')
+        if not self.is_distributed():
             if len(x) == 1:
                 return x[0]
             return x
