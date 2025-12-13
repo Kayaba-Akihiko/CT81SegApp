@@ -196,6 +196,9 @@ class ReportPPT:
                 profile_dir = temp_dir / "profile"
                 profile_dir.mkdir(parents=True, exist_ok=True)
 
+                # Inject font substitution rules for this run
+                self._write_lo_font_substitution(profile_dir, REG_XCU)
+
                 # Convert PPTX -> PDF
                 cmd = [
                     "soffice",  # prefer soffice over libreoffice
@@ -207,7 +210,7 @@ class ReportPPT:
                     f"-env:UserInstallation=file://{profile_dir}",
                     "--convert-to", "pdf:impress_pdf_Export",
                     "--outdir", str(temp_dir),
-                    str(temp_pptx_path),  # ✅ INPUT IS PPTX
+                    str(temp_pptx_path),
                 ]
                 r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 if r.returncode != 0:
@@ -296,3 +299,66 @@ class ReportPPT:
         iio.imwrite(image_stream, image, extension=extension)
         image_stream.seek(0)
         return image_stream
+
+    @staticmethod
+    def _write_lo_font_substitution(profile_dir: Path, reg_xcu: str) -> None:
+        """
+        Create a LibreOffice user profile and write registrymodifications.xcu
+        so that font substitution rules apply for this run.
+        """
+        user_dir = profile_dir / "user"
+        user_dir.mkdir(parents=True, exist_ok=True)
+        (user_dir / "registrymodifications.xcu").write_text(reg_xcu, encoding="utf-8")
+
+
+REG_XCU = """
+<?xml version="1.0" encoding="UTF-8"?>
+<oor:items xmlns:oor="http://openoffice.org/2001/registry">
+  <item oor:path="/org.openoffice.Office.Common/Font/Substitution">
+    <prop oor:name="ReplaceTable" oor:op="fuse">
+      <value>
+        <it>
+          <prop oor:name="ReplaceFont"><value>Meiryo</value></prop>
+          <prop oor:name="SubstituteFont"><value>Noto Sans CJK JP</value></prop>
+          <prop oor:name="Always"><value>true</value></prop>
+        </it>
+        <it>
+          <prop oor:name="ReplaceFont"><value>メイリオ</value></prop>
+          <prop oor:name="SubstituteFont"><value>Noto Sans CJK JP</value></prop>
+          <prop oor:name="Always"><value>true</value></prop>
+        </it>
+        <it>
+          <prop oor:name="ReplaceFont"><value>MS Gothic</value></prop>
+          <prop oor:name="SubstituteFont"><value>Noto Sans CJK JP</value></prop>
+          <prop oor:name="Always"><value>true</value></prop>
+        </it>
+        <it>
+          <prop oor:name="ReplaceFont"><value>MS Mincho</value></prop>
+          <prop oor:name="SubstituteFont"><value>Noto Serif CJK JP</value></prop>
+          <prop oor:name="Always"><value>true</value></prop>
+        </it>
+        <it>
+          <prop oor:name="ReplaceFont"><value>Yu Gothic</value></prop>
+          <prop oor:name="SubstituteFont"><value>Noto Sans CJK JP</value></prop>
+          <prop oor:name="Always"><value>true</value></prop>
+        </it>
+        <it>
+          <prop oor:name="ReplaceFont"><value>Yu Mincho</value></prop>
+          <prop oor:name="SubstituteFont"><value>Noto Serif CJK JP</value></prop>
+          <prop oor:name="Always"><value>true</value></prop>
+        </it>
+        <it>
+          <prop oor:name="ReplaceFont"><value>ＭＳ ゴシック</value></prop>
+          <prop oor:name="SubstituteFont"><value>Noto Sans CJK JP</value></prop>
+          <prop oor:name="Always"><value>true</value></prop>
+        </it>
+        <it>
+          <prop oor:name="ReplaceFont"><value>ＭＳ 明朝</value></prop>
+          <prop oor:name="SubstituteFont"><value>Noto Serif CJK JP</value></prop>
+          <prop oor:name="Always"><value>true</value></prop>
+        </it>
+      </value>
+    </prop>
+  </item>
+</oor:items>
+"""

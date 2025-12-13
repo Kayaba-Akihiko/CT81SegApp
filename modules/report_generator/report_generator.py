@@ -92,30 +92,37 @@ class ReportGenerator:
                 TypePathLike,
             ]
     ):
-        if not isinstance(template_ppt, PPTXPresentation):
+        if os_utils.is_path_like(template_ppt):
             template_ppt = os_utils.format_path_string(template_ppt)
         self._report_ppt = ReportPPT(template_ppt)
 
-        if not isinstance(hu_statistics_table, pl.DataFrame):
+        if os_utils.is_path_like(hu_statistics_table):
             self._hu_statistics_df = self._read_dataframe(
                 os_utils.format_path_string(hu_statistics_table))
-        else:
+        elif isinstance(hu_statistics_table, pl.DataFrame):
             self._hu_statistics_df = hu_statistics_table.clone()
+        else:
+            raise TypeError(f'Invalid hu_statistics_table type: {type(hu_statistics_table)=}')
 
-        if not isinstance(rendering_config, dict):
+
+        if os_utils.is_path_like(rendering_config):
             with os_utils.format_path_string(rendering_config).open('rb') as f:
                 rendering_config = json.load(f)
-        else:
+        elif isinstance(rendering_config, dict):
             rendering_config = copy.deepcopy(rendering_config)
+        else:
+            raise TypeError(f'Invalid rendering_config type: {type(rendering_config)=}')
 
         self._skin_class_id = rendering_config.pop('skin_class_id')
         self._rendering_config = rendering_config
 
-        if not isinstance(class_info_table, pl.DataFrame):
+        if os_utils.is_path_like(class_info_table):
             self._class_info_df = self._read_dataframe(
                 os_utils.format_path_string(class_info_table))
-        else:
+        elif isinstance(class_info_table, pl.DataFrame):
             self._class_info_df = class_info_table.clone()
+        else:
+            raise TypeError(f'Invalid class_info_table type: {type(class_info_table)=}')
 
         color_table = OrderedDict()
         class_name_to_id_map = {}
@@ -214,14 +221,12 @@ class ReportGenerator:
     ):
         if pptx_save_path is None and pdf_save_path is None and image_save_path is None:
             raise ValueError('One path must be specified.')
-        if pptx_save_path is not None:
-            if not isinstance(pptx_save_path, IO):
+        if pptx_save_path is not None and os_utils.is_path_like(pptx_save_path):
                 pptx_save_path = os_utils.format_path_string(pptx_save_path)
         if pdf_save_path is not None:
             pdf_save_path = os_utils.format_path_string(pdf_save_path)
-        if image_save_path is not None:
-            if not isinstance(image_save_path, IO):
-                image_save_path = os_utils.format_path_string(image_save_path)
+        if image_save_path is not None and os_utils.is_path_like(image_save_path):
+            image_save_path = os_utils.format_path_string(image_save_path)
 
         if labelmap.ndim != 3:
             raise ValueError('Labelmap must be 3D')
