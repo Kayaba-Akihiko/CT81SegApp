@@ -104,7 +104,7 @@ def _calculate_mean_hu(
     res = []
     for class_id in range(n_classes):
         mask = (labelmap == class_id)
-        if mask.any():
+        if not mask.any():
             res.append(None)
             continue
         res.append(image[mask].mean())
