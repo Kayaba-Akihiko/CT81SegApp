@@ -1330,6 +1330,29 @@ class ArrayUtils:
             )
 
     @classmethod
+    def one_hot(cls, array: TypeArrayLike[NPInteger], num_classes: int) -> TypeArrayLike[NPInteger]:
+        if (array < 0).any() or (array >= num_classes).any():
+            raise ValueError(f"Invalid class label: {array}.")
+        dtype = cls.convert_dtype_to_string(array.dtype)
+        if dtype not in {'int8', 'int16', 'int32', 'int64'}:
+            raise ValueError(f"Unsupported dtype: {dtype}.")
+        if dtype != 'int64':
+            array_ = cls.to(array, 'int64')
+        else:
+            array_ = array
+
+        if isinstance(array_, np.ndarray):
+            return np.eye(num_classes)[array_]
+        elif HAS_CUPY and isinstance(array_, cp.ndarray):
+            return cp.eye(num_classes)[array_]
+        elif HAS_TORCH and isinstance(array_, torch.Tensor):
+            return F.one_hot(array_, num_classes=num_classes)
+        else:
+            raise TypeError(
+                f"Unsupported array type: {type(array_)}. "
+            )
+
+    @classmethod
     def _norm_pad_width(
             cls,
             pad_width: TypePadWidth,

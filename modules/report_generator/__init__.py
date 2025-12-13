@@ -4,3 +4,6 @@
 #  All rights reserved.
 #  This file can not be copied and/or distributed
 #  without the express permission of Yi GU.
+
+
+from .report_generator import ReportGenerator, PatientInfoData

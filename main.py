@@ -14,13 +14,17 @@ from pathlib import Path
 import time
 import copy
 import traceback
+from typing import Tuple, List, Dict, Union
 
 import numpy as np
+import numpy.typing as npt
 
 from xmodules.logging import Logger
 from xmodules.xutils import os_utils, lib_utils, metaimage_utils, dicom_utils, array_utils as xp
 from xmodules.xdistributor import get_distributor
 from xmodules.xqct2bmd.inferencer import Inferencer
+
+from modules.report_generator import ReportGenerator, PatientInfoData
 
 from lightning.fabric.accelerators import CPUAccelerator, CUDAAccelerator, MPSAccelerator, XLAAccelerator
 
@@ -215,10 +219,65 @@ def main():
     else:
         model_data_load_time = None
 
-    image, spacing, position = None, None, None
+    image, spacing, position, patient_info = None, None, None, None
     image_load_time = None
+    if distributor.is_main_process():
+        _logger.info(f'Load image from {image_path} .')
+        image_load_time_start = time.perf_counter()
+        image, spacing, position, patient_info = read_image(
+            image_path,
+            n_workers=n_workers,
+            progress_bar=True,
+            progress_desc='Reading image',
+            dicom_name_regex=opt.dicom_name_regex,
+        )
+        image_loading_time = time.perf_counter() - image_load_time_start
+        _logger.info(f'Image loading time: {image_loading_time:.2f} seconds.')
+    if distributor.is_distributed():
+        image, spacing, position, patient_info = distributor.broadcast_object(
+            image, spacing, position, patient_info
+        )
 
 
+def read_image(
+        image_path: Path,
+        n_workers: int = 4,
+        progress_bar: bool = True,
+        progress_desc='',
+        dicom_name_regex='.*\\.dcm$',
+) -> Tuple[
+    npt.NDArray[xp.NPIntOrFloat],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    PatientInfoData,
+]:
+    path_name = image_path.name
+    if path_name.endswith('.mhd') or path_name.endswith('.mha'):
+        # (N, H, W)
+        image, spacing, position = metaimage_utils.read(image_path)
+        patient_info = PatientInfoData()
+    else:
+        tag_name_map = {
+            'name': (0x0010, 0x0010),
+            'sex': (0x0010, 0x0040),
+            'age': (0x0010, 0x1010)
+        }
+        image, spacing, position, tag_res = dicom_utils.read_dicom_folder(
+            image_path,
+            name_regex=dicom_name_regex,
+            n_workers=n_workers,
+            progress_bar=progress_bar,
+            progress_desc=progress_desc,
+            required_tag=list(tag_name_map.values())
+        )
+        creation_kwargs = {}
+        for tag_name, tag_hex in tag_name_map.items():
+            creation_kwargs[tag_name] = tag_res[tag_hex]
+        patient_info = PatientInfoData.from_dict(**creation_kwargs)
+
+    if position is None:
+        position = np.zeros(len(spacing), dtype=np.float64)
+    return image, spacing, position, patient_info
 
 if __name__ == '__main__':
     main()

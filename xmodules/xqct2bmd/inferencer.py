@@ -15,7 +15,7 @@ import numpy as np
 import numpy.typing as npt
 import onnxruntime as ort
 import onnx
-
+from sklearn.tests.test_multiclass import n_classes
 
 from .data_normalizer import DataNormalizer
 from ..xutils import os_utils, array_utils as xp, image_utils
@@ -86,7 +86,7 @@ class Inferencer:
             image: xp.TypeArrayLike[NPIntOrFloat],
             model_data: ModelData,
             batch_size: int = 1,
-            process_dtype: Literal['float32', 'float64'] = 'float32',
+            process_dtype: Literal['float32', 'float64'] = 'float64',
             prepro_device: Literal['cpu', 'cuda', 'auto'] = 'auto',
             progress_bar=True,
             progress_desc: str = '',
@@ -120,7 +120,6 @@ class Inferencer:
                 )
 
             to_array = xp.to_numpy
-            pad_fn = np.pad
             empty_fn = np.empty
             argmax_fn = np.argmax
         elif prepro_device == 'cuda':
@@ -159,7 +158,7 @@ class Inferencer:
         model_H, model_W = model_out_shape[-2:]
 
         n_samples, H, W = image.shape
-        pred_label = np.empty((n_samples, H, W), dtype=np.int16)
+        pred_labelmap = np.empty((n_samples, H, W), dtype=np.int16)
         n_batches = (n_samples + batch_size - 1) // batch_size
 
         if (H, W) != (model_H, model_W):
@@ -182,6 +181,7 @@ class Inferencer:
         iterator = range(n_batches)
         if progress_bar:
             iterator = tqdm(iterator, desc=progress_desc, total=n_batches)
+
 
         for i in iterator:
             start = i * batch_size
@@ -207,9 +207,18 @@ class Inferencer:
 
             # (B, C, H, W)
             pred_logits = restore_fn(pred_logits)
-
-            pred_label[start: end] = xp.to_numpy(
-                argmax_fn(pred_logits, axis=1), dtype='int16')
+            # (B, H, W)
+            batch_labelmap = argmax_fn(pred_logits, axis=1)
             del pred_logits
-        return pred_label
+            pred_labelmap[start: end] = xp.to_numpy(batch_labelmap, dtype=np.int16)
+
+            batch_slice = xp.to(batch_slice, dtype=process_dtype)
+            # calculate mean hu etc.
+
+
+            for class_id in range(n_classes):
+
+            del batch_slice, batch_labelmap
+
+        return pred_labelmap
 

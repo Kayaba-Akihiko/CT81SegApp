@@ -62,22 +62,46 @@ class PatientInfoData:
             field_name = field_map[key_l]
 
             if field_name == "sex" and val is not None:
-                if not isinstance(val, str):
-                    raise TypeError(f'Invalid type {type(val)=}')
-                if val not in {'male', 'female'}:
-                    raise ValueError(f'Invalid value {val=}')
+                try:
+                    val = cls._format_sex(val)
+                except (TypeError, ValueError):
+                    val = None
                 build_dict[field_name] = val
             elif field_name == "age":
-                if not isinstance(val, (int, float)):
-                    raise TypeError(f'Invalid type {type(val)=}')
-                if val <= 0:
-                    raise ValueError(f'Invalid value {val=}')
+                try:
+                    val = cls._format_age(val)
+                except (TypeError, ValueError, OverflowError):
+                    val = None
                 build_dict[field_name] = val
             else:
                 # ... lots to check ...
                 build_dict[field_name] = val
 
         return cls(**build_dict)
+
+    @staticmethod
+    def _format_sex(sex: str) -> TypeSex:
+        if not isinstance(sex, str):
+            raise TypeError(f'Invalid type {type(sex)=}')
+        sex = sex.lower()
+        if sex in {'m', 'male', '男性', '男'}:
+            return 'male'
+        elif sex in {'f', 'female', '女性', '女'}:
+            return 'female'
+        else:
+            raise ValueError(f'Invalid sex {sex=}')
+
+    @staticmethod
+    def _format_age(age: Union[int, float, str]) -> int:
+        if isinstance(age, str):
+            age = age.lower()
+            if age.endswith('y'):
+                age = age[:-1]
+        elif isinstance(age, (int, float)):
+            pass
+        else:
+            raise TypeError(f'Invalid type {type(age)=}')
+        return int(age)
 
 
 class ReportGenerator:
