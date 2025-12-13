@@ -151,14 +151,13 @@ class FigureUtils:
         # Draw boxes / stars
         # ----------------------------
         for i, box_data in enumerate(boxes):
-            if not box_data.visible:
-                continue
             color = box_data.color
             target = box_data.target
             mean, std = box_data.mean, box_data.std
-
             draw_box = _is_valid_number(mean) and _is_valid_number(std) and float(std) > 0.0
             draw_star = _is_valid_number(target)
+            if not box_data.visible:
+                draw_box, draw_star = False, False
 
             if draw_box:
                 x0 = mean - std
@@ -208,24 +207,24 @@ class FigureUtils:
                         facecolor='black', edgecolors='white',
                         linewidths=0.7, zorder=5)
 
-        # ----------------------------
-        # Draw "invisible" rows as horizontal lines across current x-range
-        # ----------------------------
-        xmin_line, xmax_line = ax.get_xlim()
-        for i, box_data in enumerate(boxes):
-            if box_data.visible:
-                continue
-            if pixel_mode:
-                y_c = y_centers[i]
-                ax.hlines(
-                    int(y_c), xmin_line, xmax_line,
-                    colors='black',
-                    linewidth=1.0, zorder=6, antialiased=False)
-            else:
-                ax.hlines(
-                    y_pos[i], xmin_line, xmax_line,
-                    colors='black',
-                    linewidth=1.0, zorder=6)
+            if not draw_box and not draw_star:
+                # ----------------------------
+                # Draw "invisible" rows as horizontal lines across current x-range
+                # ----------------------------
+                for i, box_data in enumerate(boxes):
+                    if box_data.visible:
+                        continue
+                if pixel_mode:
+                    y_c = y_centers[i]
+                    ax.hlines(
+                        int(y_c), xmin, xmax,
+                        colors='black',
+                        linewidth=1.0, zorder=6, antialiased=False)
+                else:
+                    ax.hlines(
+                        y_pos[i], xmin, xmax,
+                        colors='black',
+                        linewidth=1.0, zorder=6)
 
         # ----------------------------
         # Styling + export
