@@ -1575,6 +1575,7 @@ std = ArrayUtils.std
 var = ArrayUtils.var
 round = ArrayUtils.round
 argmax = ArrayUtils.argmax
+one_hot = ArrayUtils.one_hot
 pad = ArrayUtils.pad
 unpad = ArrayUtils.unpad
 expand_dims = ArrayUtils.expand_dims

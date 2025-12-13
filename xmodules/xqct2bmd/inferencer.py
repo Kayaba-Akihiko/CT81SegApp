@@ -215,8 +215,7 @@ class Inferencer:
             batch_slice = xp.to(batch_slice, dtype=process_dtype)
             # calculate mean hu etc.
 
-
-            for class_id in range(n_classes):
+            batch_labelmap = xp.one_hot(batch_labelmap, n_classes=n_classes)
 
             del batch_slice, batch_labelmap
 
