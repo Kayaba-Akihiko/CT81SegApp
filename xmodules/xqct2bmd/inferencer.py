@@ -211,31 +211,9 @@ class Inferencer:
 
             # (B, C, H, W)
             pred_logits = restore_fn(pred_logits)
-            # (B, H, W)
-            batch_labelmap = argmax_fn(pred_logits, axis=1)
-            del pred_logits
-            pred_labelmap[start: end] = xp.to_numpy(batch_labelmap, dtype=np.int16)
-
-            batch_slice = xp.to(batch_slice, dtype=process_dtype)
-            # calculate mean hu etc.
-
-            # (B, H, W, C)
-            batch_labelmap = xp.one_hot(batch_labelmap, num_classes=n_classes)
-            # (B, H, W) -> (B, H, W, 1)
-            batch_slice = batch_slice[..., None]
-            batch_labelmap = xp.to(batch_labelmap, dtype=process_dtype)
-            batch_slice = xp.to(batch_slice, dtype=process_dtype)
-            # (B, H, W, 1) -> (B, H, W, C)
-            batch_masked_slice = batch_slice * batch_labelmap
-
-            # (C, )
-            hu_sums += xp.to(
-                batch_masked_slice, dtype='float64').sum((0, 1, 2))
-            # (C, )
-            class_counts += xp.to(
-                batch_labelmap, dtype='int64').sum((0, 1, 2))
-
-            del batch_slice, batch_labelmap, batch_masked_slice
+            pred_labelmap[start: end] = xp.to_numpy(
+                argmax_fn(pred_logits, axis=1), dtype=np.int16
+            )
 
         return pred_labelmap, hu_sums, class_counts
 

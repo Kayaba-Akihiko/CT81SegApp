@@ -14,7 +14,7 @@ import numpy as np
 import numpy.typing as npt
 
 from modules.report_generator.report_generator import ReportGenerator, ClassGroupData
-from xmodules.xutils import metaimage_utils, dicom_utils
+from xmodules.xutils import metaimage_utils, dicom_utils, array_utils as xp
 
 def main():
     this_file = Path(__file__)
@@ -33,7 +33,31 @@ def main():
     ct_image, s, _ = dicom_utils.read_dicom_folder(
         ct_path, name_regex=".*", n_workers=8, progress_bar=True)
     assert np.allclose(spacing, s)
-    mean_hus = _calculate_mean_hu(ct_image, labelmap)
+
+    total_exec_time = 0
+    for i in range(11):
+        time_start = time.perf_counter()
+        _calculate_mean_hu(ct_image, labelmap)
+        exec_time = time.perf_counter() - time_start
+        if i == 0:
+            continue
+        print(f'Exec time: {exec_time:.2f} seconds.')
+        total_exec_time += exec_time
+    avg_exec_time = total_exec_time / 10
+    print(f'Average time {avg_exec_time:.2f} seconds per loop.')
+
+    total_exec_time = 0
+    for i in range(11):
+        time_start = time.perf_counter()
+        _calculate_mean_hu(xp.to_cupy(ct_image), xp.to_cupy(labelmap))
+        exec_time = time.perf_counter() - time_start
+        if i == 0:
+            continue
+        print(f'Exec time: {exec_time:.2f} seconds.')
+        total_exec_time += exec_time
+    avg_exec_time = total_exec_time / 10
+    print(f'Average time {avg_exec_time:.2f} seconds per loop.')
+
     return
 
     template_path = resource_root / 'MICBON_AI_report_template_p3.pptx'
@@ -72,11 +96,8 @@ def _calculate_mean_hu(
         image: npt.NDArray, labelmap: npt.NDArray[np.integer],
         n_classes: int = 81,
 ):
-    labelmap = np.where(labelmap > 2, 0, labelmap)
-    n_classes = 3
-    labelmap = labelmap.astype(np.int64)
-
-    start_time = time.perf_counter()
+    # Image: (N, H, W) (500, 512, 512)
+    # Labelmap: (N, H, W) (500, 512, 512)
     res = []
     image = image.astype(np.float32)
     for class_id in range(n_classes):
@@ -85,21 +106,6 @@ def _calculate_mean_hu(
             res.append(None)
             continue
         res.append(np.mean(image[mask]))
-
-    res = np.asarray(res, dtype=np.float64)
-    print(f'Elapsed time: {time.perf_counter() - start_time:.3f} sec')
-
-    start_time = time.perf_counter()
-    labelmap = np.eye(n_classes)[labelmap].astype(np.float32)
-    image = image[..., None] * labelmap
-    total_hu = image.sum((0, 1, 2)).astype(np.float64)
-    class_voxels = labelmap.sum((0, 1, 2)).astype(np.float64)
-    hus = total_hu / class_voxels
-    print(f'Elapsed time: {time.perf_counter() - start_time:.3f} sec')
-    print(np.isclose(res, hus))
-    print(res-hus)
-
-
     return res
 
 
