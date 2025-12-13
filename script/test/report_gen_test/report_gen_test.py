@@ -103,12 +103,11 @@ def _calculate_mean_hu(
     # Labelmap: (N, H, W) (500, 512, 512)
     res = []
     for class_id in range(n_classes):
-        count = (labelmap == class_id).sum()
-        if count == 0:
+        mask = (labelmap == class_id)
+        if mask.any():
             res.append(None)
             continue
-        weight = 1 / count
-        res.append((image * weight).sum())
+        res.append(image[mask].mean())
     return res
 
 
