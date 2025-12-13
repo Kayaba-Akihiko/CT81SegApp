@@ -34,6 +34,8 @@ def main():
         ct_path, name_regex=".*", n_workers=8, progress_bar=True)
     assert np.allclose(spacing, s)
 
+    ct_image = ct_image.astype(np.float32)
+    labelmap = labelmap.astype(np.uint8)
     total_exec_time = 0
     for i in range(11):
         time_start = time.perf_counter()
@@ -99,7 +101,6 @@ def _calculate_mean_hu(
     # Image: (N, H, W) (500, 512, 512)
     # Labelmap: (N, H, W) (500, 512, 512)
     res = []
-    image = image.astype(np.float32)
     for class_id in range(n_classes):
         mask = labelmap == class_id
         if not mask.any():
