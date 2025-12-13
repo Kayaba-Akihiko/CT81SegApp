@@ -103,20 +103,27 @@ def main():
         ),
     )
 
-    output_dir = opt.output_dir
-    if output_dir is None:
-        output_dir = Path('.')
-    else:
-        output_dir = os_utils.format_path_string(output_dir)
-    output_dir.mkdir(exist_ok=True, parents=True)
-
     distributor = get_distributor(
         opt.dist_backend,
         seed=831,
         accelerator=opt.dist_accelerator,
         devices=opt.dist_devices,
     )
+    _logger.info(f'Launch distributor {distributor.backend}')
     distributor.launch()
+    _logger.info(f'Distributor launched.')
+
+    total_time_start = None
+    if distributor.is_main_process():
+        total_time_start = time.perf_counter()
+
+    output_dir = opt.output_dir
+    if output_dir is None:
+        output_dir = Path('.')
+    else:
+        output_dir = os_utils.format_path_string(output_dir)
+    if distributor.is_main_process():
+        output_dir.mkdir(exist_ok=True, parents=True)
 
     logging.basicConfig(
         level=opt.logging_level,
@@ -130,6 +137,88 @@ def main():
         ],
         force=True,
     )
+
+    if distributor.is_main_process():
+        config_log_str = (
+                "\n---- Configuration ----\n" +
+                json.dumps(vars(opt), indent=2) +
+                "\n---- End of configuration ----"
+        )
+        _logger.info(config_log_str)
+
+    if distributor.is_main_process():
+        _logger.info(f'Using distributor accelerator {opt.accelerator}')
+        _logger.info(f'Using distributor devices: {opt.devices}')
+
+    image_path = os_utils.format_path_string(opt.image_path)
+    if not image_path.exists():
+        raise FileNotFoundError(f'Image path {image_path} not found.')
+    model_name = opt.model
+    if model_name is None:
+        model_name = 'nnunet_1res_ct_81_seg'
+    if distributor.is_main_process():
+        _logger.info(f'Using model {model_name}.')
+    model_load_path = this_dir / 'resources' / f'{model_name}.onnx'
+    if not model_load_path.exists():
+        raise FileNotFoundError(
+            f'Model {model_name} not found: {model_load_path}')
+    norm_config_load_path = this_dir / 'resources' / f'{model_name}.json'
+    if not norm_config_load_path.exists():
+        raise FileNotFoundError(
+            f'Normalization config {model_name} not found: {norm_config_load_path}')
+
+    n_classes = 81
+    resolution = 512
+    batch_size = opt.batch_size
+    if batch_size <= 0:
+        raise ValueError(f'Invalid batch size: {batch_size=}')
+
+    rendering_config_path = this_dir / 'resources' / 'rendering_config.json'
+    if not rendering_config_path.exists():
+        raise FileNotFoundError(
+            f'Rendering config not found: {rendering_config_path}')
+
+    n_workers = max(0, min(opt.n_workers, os_utils.get_max_n_worker()))
+    if distributor.is_main_process():
+        _logger.info(f'Using {n_workers} workers.')
+
+    device = opt.device
+    if distributor.is_main_process():
+        _logger.info(f'Using device {device}.')
+    if device == 'cpu':
+        onnx_providers = ['CPUExecutionProvider']
+    elif device == 'cuda':
+        onnx_providers = [
+            ('CUDAExecutionProvider', {"device_id": distributor.local_rank}),
+        ]
+    else:
+        raise ValueError(
+            f'Device {distributor.device.type} is not supported.')
+
+    # ----
+    # Load every things
+    # ----
+    # Load model
+    model_data_load_time_start = None
+    if distributor.is_main_process():
+        model_data_load_time_start = time.perf_counter()
+    model_data = Inferencer.get_model(
+        model_path=model_load_path,
+        norm_config_path=norm_config_load_path,
+        in_shape=(1, resolution, resolution),
+        out_shape=(n_classes, resolution, resolution),
+        onnx_providers=onnx_providers,
+    )
+    if distributor.is_main_process():
+        model_data_load_time = time.perf_counter() - model_data_load_time_start
+        _logger.info(f'Model loading time: {model_data_load_time:.2f} seconds.')
+    else:
+        model_data_load_time = None
+
+    image, spacing, position = None, None, None
+    image_load_time = None
+
+
 
 if __name__ == '__main__':
     main()
