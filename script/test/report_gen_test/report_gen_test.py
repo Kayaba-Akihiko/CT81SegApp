@@ -78,7 +78,7 @@ def _calculate_mean_hu(
 
     start_time = time.perf_counter()
     res = []
-    image = image.astype(np.float64)
+    image = image.astype(np.float32)
     for class_id in range(n_classes):
         mask = labelmap == class_id
         if not np.any(mask):
@@ -90,10 +90,10 @@ def _calculate_mean_hu(
     print(f'Elapsed time: {time.perf_counter() - start_time:.3f} sec')
 
     start_time = time.perf_counter()
-    labelmap = np.eye(n_classes)[labelmap]
+    labelmap = np.eye(n_classes)[labelmap].astype(np.float32)
     image = image[..., None] * labelmap
-    total_hu = image.sum((0, 1, 2))
-    class_voxels = labelmap.sum((0, 1, 2))
+    total_hu = image.sum((0, 1, 2)).astype(np.float64)
+    class_voxels = labelmap.sum((0, 1, 2)).astype(np.float64)
     hus = total_hu / class_voxels
     print(f'Elapsed time: {time.perf_counter() - start_time:.3f} sec')
     print(np.isclose(res, hus))
