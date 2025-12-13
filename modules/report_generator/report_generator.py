@@ -263,7 +263,7 @@ class ReportGenerator:
                     np.asarray(list(all_visual_class_ids), dtype=np.int64)
                 ]
             ]),
-            pad_ratio=0.05
+            pad_ratio=0.12
         )
         del means, stds, all_visual_class_ids
 
@@ -324,11 +324,11 @@ class ReportGenerator:
                 del class_df
 
                 target = float(class_mean_hus[class_id])
-                if np.isfinite(mean) and np.isfinite(std) and np.isfinite(target) and target < mean - std:
-                    class_low_target_table[class_id] = 1
-                    print(f'{group_name}: {class_id=}: {target=}, {mean=}, {std=}')
-                else:
-                    class_low_target_table[class_id] = 0
+                if np.isfinite(target):
+                    if np.isfinite(mean) and np.isfinite(std) and target < mean - std:
+                        class_low_target_table[class_id] = 1
+                    else:
+                        class_low_target_table[class_id] = 0
                 box_drawing_data.append(figure_utils.BoxDrawingData(
                     target=target,
                     mean=mean, std=std,
@@ -354,8 +354,6 @@ class ReportGenerator:
             observation = self._observation_messages[2]
         else:
             observation = self._observation_messages[1]
-        print(low_target_ratio)
-        print(json.dumps(class_low_target_table, indent=2))
         del low_target_ratio, class_low_target_table
         report_ppt.fill_texts(self._build_text_placeholders(patient_info, observation))
         del observation
