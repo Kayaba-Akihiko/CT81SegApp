@@ -8,6 +8,7 @@
 
 from pathlib import Path
 from typing import Literal
+import time
 
 import numpy as np
 import numpy.typing as npt
@@ -71,6 +72,7 @@ def _calculate_mean_hu(
         image: npt.NDArray, labelmap: npt.NDArray[np.integer],
         n_classes: int = 81,
 ):
+    start_time = time.perf_counter()
     res = []
     image = image.astype(np.float32)
     for class_id in range(n_classes):
@@ -81,7 +83,9 @@ def _calculate_mean_hu(
         res.append(np.mean(image[mask]))
 
     res = np.asarray(res, dtype=np.float64)
+    print(f'Elapsed time: {time.perf_counter() - start_time:.3f} sec')
 
+    start_time = time.perf_counter()
     labelmap = np.eye(n_classes)[labelmap]
     image = image[..., None] * labelmap
     total_hu = image.sum((0, 1, 2))
@@ -90,6 +94,7 @@ def _calculate_mean_hu(
     print(np.isclose(res, hus))
     print(res)
     print(hus)
+    print(f'Elapsed time: {time.perf_counter() - start_time:.3f} sec')
 
     return res
 
