@@ -12,6 +12,7 @@ import time
 
 import numpy as np
 import numpy.typing as npt
+from tests.transforms.croppad.test_rand_weighted_cropd import weight
 
 from modules.report_generator.report_generator import ReportGenerator, ClassGroupData
 from xmodules.xutils import metaimage_utils, dicom_utils, array_utils as xp
@@ -103,11 +104,12 @@ def _calculate_mean_hu(
     # Labelmap: (N, H, W) (500, 512, 512)
     res = []
     for class_id in range(n_classes):
-        mask = labelmap == class_id
-        if not mask.any():
+        count = (labelmap == class_id).sum()
+        if count == 0:
             res.append(None)
             continue
-        res.append(image[mask].mean())
+        weight = 1 / count
+        res.append((image * weight).sum())
     return res
 
 

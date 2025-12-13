@@ -536,7 +536,7 @@ class ArrayUtils:
             with device_context:
                 array = cp.asarray(array, dtype)
         else:
-            if device_id is not None:
+            with device_context:
                 array = cp.asarray(array, dtype)
         return array
 
