@@ -7,12 +7,10 @@
 
 
 from pathlib import Path
-from collections import OrderedDict
 from typing import Literal
 
 import numpy as np
 import numpy.typing as npt
-import polars as pl
 
 from modules.report_generator.report_generator import ReportGenerator, ClassGroupData
 from xmodules.xutils import metaimage_utils, dicom_utils
@@ -58,7 +56,7 @@ def main():
         labelmap=labelmap,
         spacing=spacing,
         class_mean_hus=mean_hus,
-        save_path=output_dir / 'report.pptx',
+        pptx_save_path=output_dir / 'report.pptx',
         device='cuda',
     )
 

@@ -205,10 +205,14 @@ class ReportGenerator:
             labelmap: npt.NDArray[np.integer],
             spacing: npt.NDArray[np.float64],
             class_mean_hus: npt.NDArray[np.float64],
-            save_path: Path,
+            pptx_save_path: Optional[Path] = None,
+            image_save_path: Optional[Path] = None,
             fig_dpi=96,
             device='cpu',
     ):
+        if pptx_save_path is None and image_save_path is None:
+            raise ValueError('pptx_save_path and png_save_path cannot both be None')
+
         if labelmap.ndim != 3:
             raise ValueError('Labelmap must be 3D')
         if spacing.ndim != 1:
@@ -438,19 +442,23 @@ class ReportGenerator:
             del fill_data
         del ppt_image_dict, fit_mode
         report_ppt.fill_images(fill_images)
-        report_ppt.save(save_path)
+        if pptx_save_path is not None:
+            report_ppt.save_as_pptx(pptx_save_path)
+        if image_save_path is not None:
+            raise NotImplementedError
+
 
     @staticmethod
     def _build_text_placeholders(
             patient_info: Optional[PatientInfoData] = None,
             observation_message: Optional[str] = None,
-            default_str: str = '-'
+            default_str: str = '-',
+            launguage: str = 'en'
     ) -> Dict[str, str]:
         if patient_info is None:
             patient_info = PatientInfoData()
         placeholders = {
             'NAME': patient_info.name,
-            'SEX': patient_info.sex,
             'BIRTH_YEAR': patient_info.birth_year,
             'BIRTH_MONTH': patient_info.birth_month,
             'BIRTH_DAY': patient_info.birth_day,
@@ -462,6 +470,27 @@ class ReportGenerator:
             'SHOOTING_DAY': patient_info.shooting_day,
             'OBSERVATIONS': observation_message,
         }
+
+        # Sex mapping
+        sex = patient_info.sex
+        if sex is not None:
+            sex = sex.lower()
+            if sex in {'m', 'male', '男'}:
+                if launguage == 'jp':
+                    sex = '男性'
+                elif launguage == 'en':
+                    sex = 'Male'
+                else:
+                    raise ValueError(f'Unsupported language: {launguage}')
+            elif sex in {'f', 'female', '女'}:
+                if launguage == 'jp':
+                    sex = '女性'
+                elif launguage == 'en':
+                    sex = 'Female'
+                else:
+                    raise ValueError(f'Unsupported language: {launguage}')
+        placeholders['SEX'] = sex
+
         for k, v in placeholders.items():
             if v is None:
                 placeholders[k] = default_str

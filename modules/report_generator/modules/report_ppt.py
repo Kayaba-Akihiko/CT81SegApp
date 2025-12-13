@@ -175,9 +175,12 @@ class ReportPPT:
             if child is not None:
                 yield from cls._iter_shapes(child)
 
-    def save(self, save_path: Path) -> None:
+    def save_as_pptx(self, save_path: Path) -> None:
         save_path.parent.mkdir(parents=True, exist_ok=True)
         self.presentation.save(str(save_path))
+
+    def save_as_image(self, image_save_path: Path) -> None:
+        slide = self.presentation.slides[0].save
 
     @classmethod
     def _fit_image_into_slide(
