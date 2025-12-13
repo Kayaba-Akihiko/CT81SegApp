@@ -214,8 +214,13 @@ class ReportPPT:
                 ]
                 r = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 if r.returncode != 0:
-                    raise RuntimeError(f"LibreOffice failed (code {r.returncode}).\nSTDERR:\n{r.stderr}\nSTDOUT:\n{r.stdout}")
+                    raise RuntimeError(
+                        f"LibreOffice failed (code {r.returncode}).\n"
+                        f"STDERR:\n{r.stderr}\n"
+                        f"STDOUT:\n{r.stdout}"
+                    )
 
+                # Output PDF name: LO uses input stem
                 temp_pdf_path = temp_dir / f"{temp_pptx_path.stem}.pdf"
                 if not temp_pdf_path.exists():
                     raise RuntimeError(f"LibreOffice reported success but PDF not found: {temp_pdf_path}")
