@@ -16,12 +16,18 @@ def main():
 
     ct_path = this_dir / 'report_gen_test' / 'UZU00001_CT1'
 
+    tag_name_map = {
+        'name': (0x0010, 0x0010),
+        'sex': (0x0010, 0x0040),
+        'age': (0x0010, 0x1010)
+    }
+
     ct_image, s, p, tags = dicom_utils.read_dicom_folder(
         ct_path,
         name_regex=".*",
         n_workers=8,
         progress_bar=True,
-        required_tag=['PN', 'CS', 'AS', 'DS']  # Name, Sex, Age, Weight
+        required_tag=list(tag_name_map.values())
     )
     print(tags)
 
