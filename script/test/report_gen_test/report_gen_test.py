@@ -57,6 +57,8 @@ def main():
         spacing=spacing,
         class_mean_hus=mean_hus,
         pptx_save_path=output_dir / 'report.pptx',
+        pdf_save_path=output_dir / 'report.pdf',
+        image_save_path=output_dir / 'report.png',
         device='cuda',
     )
 

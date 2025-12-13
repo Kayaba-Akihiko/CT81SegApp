@@ -6,7 +6,7 @@
 #  without the express permission of Yi GU.
 
 
-from typing import Self, Tuple, Optional, Union, Dict, Any, TypeAlias, Literal, Type, TypeVar, Protocol, List, Sequence
+from typing import IO, Self, Tuple, Optional, Union, Dict, Any, TypeAlias, Literal, Type, TypeVar, Protocol, List, Sequence
 from pathlib import Path
 from collections import OrderedDict, defaultdict
 import json
@@ -205,13 +205,14 @@ class ReportGenerator:
             labelmap: npt.NDArray[np.integer],
             spacing: npt.NDArray[np.float64],
             class_mean_hus: npt.NDArray[np.float64],
-            pptx_save_path: Optional[Path] = None,
-            image_save_path: Optional[Path] = None,
+            pptx_save_path: Optional[Union[Path, IO]] = None,
+            pdf_save_path: Optional[Path] = None,
+            image_save_path: Optional[Path, IO] = None,
             fig_dpi=96,
             device='cpu',
     ):
-        if pptx_save_path is None and image_save_path is None:
-            raise ValueError('pptx_save_path and png_save_path cannot both be None')
+        if pptx_save_path is None and pdf_save_path is None and image_save_path is None:
+            raise ValueError('One path must be specified.')
 
         if labelmap.ndim != 3:
             raise ValueError('Labelmap must be 3D')
@@ -445,11 +446,11 @@ class ReportGenerator:
             del fill_data
         del ppt_image_dict, fit_mode
         report_ppt.fill_images(fill_images)
-        if pptx_save_path is not None:
-            report_ppt.save_as_pptx(pptx_save_path)
-        if image_save_path is not None:
-            raise NotImplementedError
-
+        report_ppt.save(
+            pptx_save_path=pptx_save_path,
+            pdf_save_path=pdf_save_path,
+            image_save_path=image_save_path,
+        )
 
     @staticmethod
     def _build_text_placeholders(

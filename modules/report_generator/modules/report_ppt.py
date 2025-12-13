@@ -7,20 +7,21 @@
 
 
 from pathlib import Path
-from typing import Union, Dict, TypeAlias, Literal, Optional, Tuple, Self
+from typing import Union, Dict, TypeAlias, Literal, Optional, Tuple, Self, IO
 import io
 from dataclasses import dataclass
 import logging
+import tempfile
+import subprocess
+import shutil
 
 import numpy as np
 import numpy.typing as npt
 from pptx.presentation import (
     Presentation as PPTXPresentation,
-    Slides as PPTXSlides,
 )
 from pptx.shapes.picture import Picture as PPTXPicture
 from pptx.util import Length as PPTXLength
-from pptx.shapes.base import BaseShape as PPTXBaseShape
 from pptx.text.text import _Run as PPTXRun
 from pptx.slide import (
     Slide as PPTXSlide,
@@ -167,6 +168,42 @@ class ReportPPT:
                 f'Unknown filling keys: {unknown_filling_keys}')
         return res
 
+    def save(
+            self,
+            pptx_save_path: Optional[Union[Path, IO]] = None,
+            pdf_save_path: Optional[Path] = None,
+            image_save_path: Optional[Path, IO] = None,
+    ):
+        if not pptx_save_path and not pdf_save_path and not image_save_path:
+            raise ValueError('One path must be specified.')
+
+        if pptx_save_path is not None:
+            pptx_save_path.parent.mkdir(parents=True, exist_ok=True)
+            self.presentation.save(str(pptx_save_path))
+
+        if pdf_save_path or image_save_path is not None:
+            with tempfile.TemporaryDirectory() as temp_dir_name:
+                temp_dir = Path(temp_dir_name)
+                temp_pptx_path = temp_dir / 'temp_ppt.pptx'
+                temp_pdf_path = temp_dir / f'{temp_pptx_path.stem}.pdf'
+                self.presentation.save(str(temp_pptx_path))
+
+                cmd = [
+                    "libreoffice",
+                    "--headless",
+                    "--convert-to", "pdf",
+                    "--outdir", str(temp_dir),
+                    str(temp_pdf_path)
+                ]
+                subprocess.run(cmd, check=True)
+                if pdf_save_path is not None:
+                    shutil.copy2(temp_pdf_path, pdf_save_path)
+
+                if image_save_path is not None:
+                    from pdf2image import convert_from_path
+                    images = convert_from_path(temp_pdf_path)
+                    images[0].save(image_save_path)
+
     @classmethod
     def _iter_shapes(cls, shapes: PPTXSlideShapes):
         for sh in shapes:
@@ -174,13 +211,6 @@ class ReportPPT:
             child = getattr(sh, 'shapes', None)
             if child is not None:
                 yield from cls._iter_shapes(child)
-
-    def save_as_pptx(self, save_path: Path) -> None:
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        self.presentation.save(str(save_path))
-
-    def save_as_image(self, image_save_path: Path) -> None:
-        slide = self.presentation.slides[0].save
 
     @classmethod
     def _fit_image_into_slide(
