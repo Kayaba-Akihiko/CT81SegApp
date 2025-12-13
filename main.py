@@ -231,8 +231,8 @@ def main():
             progress_desc='Reading image',
             dicom_name_regex=opt.dicom_name_regex,
         )
-        image_loading_time = time.perf_counter() - image_load_time_start
-        _logger.info(f'Image loading time: {image_loading_time:.2f} seconds.')
+        image_load_time = time.perf_counter() - image_load_time_start
+        _logger.info(f'Image loading time: {image_load_time:.2f} seconds.')
     if distributor.is_distributed():
         image, spacing, position, patient_info = distributor.broadcast_object(
             image, spacing, position, patient_info

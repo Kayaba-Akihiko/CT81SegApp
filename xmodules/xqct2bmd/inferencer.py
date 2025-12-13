@@ -86,7 +86,7 @@ class Inferencer:
             image: xp.TypeArrayLike[NPIntOrFloat],
             model_data: ModelData,
             batch_size: int = 1,
-            process_dtype: Literal['float32', 'float64'] = 'float64',
+            process_dtype: Literal['float32', 'float64'] = 'float32',
             prepro_device: Literal['cpu', 'cuda', 'auto'] = 'auto',
             progress_bar=True,
             progress_desc: str = '',
@@ -182,6 +182,10 @@ class Inferencer:
         if progress_bar:
             iterator = tqdm(iterator, desc=progress_desc, total=n_batches)
 
+        hu_sums = xp.zeros(
+            (n_classes,), dtype=np.float64, backend='numpy')
+        class_counts = xp.zeros(
+            (n_classes,), dtype=np.int64, backend='numpy')
 
         for i in iterator:
             start = i * batch_size
@@ -215,9 +219,23 @@ class Inferencer:
             batch_slice = xp.to(batch_slice, dtype=process_dtype)
             # calculate mean hu etc.
 
-            batch_labelmap = xp.one_hot(batch_labelmap, n_classes=n_classes)
+            # (B, H, W, C)
+            batch_labelmap = xp.one_hot(batch_labelmap, num_classes=n_classes)
+            # (B, H, W) -> (B, H, W, 1)
+            batch_slice = batch_slice[..., None]
+            batch_labelmap = xp.to(batch_labelmap, dtype=process_dtype)
+            batch_slice = xp.to(batch_slice, dtype=process_dtype)
+            # (B, H, W, 1) -> (B, H, W, C)
+            batch_masked_slice = batch_slice * batch_labelmap
 
-            del batch_slice, batch_labelmap
+            # (C, )
+            hu_sums += xp.to(
+                batch_masked_slice, dtype='float64').sum((0, 1, 2))
+            # (C, )
+            class_counts += xp.to(
+                batch_labelmap, dtype='int64').sum((0, 1, 2))
 
-        return pred_labelmap
+            del batch_slice, batch_labelmap, batch_masked_slice
+
+        return pred_labelmap, hu_sums, class_counts
 

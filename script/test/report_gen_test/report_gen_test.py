@@ -33,6 +33,7 @@ def main():
         ct_path, name_regex=".*", n_workers=8, progress_bar=True)
     assert np.allclose(spacing, s)
     mean_hus = _calculate_mean_hu(ct_image, labelmap)
+    return
 
     template_path = resource_root / 'MICBON_AI_report_template_p3.pptx'
     hu_statistics_table_path = resource_root / 'hu_statistics.xlsx'
@@ -79,7 +80,18 @@ def _calculate_mean_hu(
             continue
         res.append(np.mean(image[mask]))
 
-    return np.asarray(res, dtype=np.float64)
+    res = np.asarray(res, dtype=np.float64)
+
+    labelmap = np.eye(n_classes)[labelmap]
+    image = image[..., None] * labelmap
+    total_hu = image.sum((0, 1, 2))
+    class_voxels = labelmap.sum((0, 1, 2))
+    hus = total_hu / class_voxels
+    print(np.isclose(res, hus))
+    print(res)
+    print(hus)
+
+    return res
 
 
 if __name__ == '__main__':
