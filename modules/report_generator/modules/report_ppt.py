@@ -172,7 +172,7 @@ class ReportPPT:
             self,
             pptx_save_path: Optional[Union[Path, IO]] = None,
             pdf_save_path: Optional[Path] = None,
-            image_save_path: Optional[Path, IO] = None,
+            image_save_path: Optional[Union[Path, IO]] = None,
     ):
         if not pptx_save_path and not pdf_save_path and not image_save_path:
             raise ValueError('One path must be specified.')

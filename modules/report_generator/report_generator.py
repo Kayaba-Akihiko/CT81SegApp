@@ -207,7 +207,7 @@ class ReportGenerator:
             class_mean_hus: npt.NDArray[np.float64],
             pptx_save_path: Optional[Union[Path, IO]] = None,
             pdf_save_path: Optional[Path] = None,
-            image_save_path: Optional[Path, IO] = None,
+            image_save_path: Optional[Union[Path, IO]] = None,
             fig_dpi=96,
             device='cpu',
     ):
