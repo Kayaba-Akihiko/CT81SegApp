@@ -63,7 +63,10 @@ class DicomUtils:
 
         tag_res = {}
         for tag in required_tag:
-            tag_res[tag] = dcfile.get(tag, default=None)
+            val = dcfile.get(tag, default=None)
+            if val is not None:
+                val = val.value
+            tag_res[tag] = val
         if len(tag_res) == 1:
             tag_res = tag_res[required_tag[0]]
         return ret[0], ret[1], ret[2], tag_res
@@ -172,7 +175,10 @@ class DicomUtils:
 
         tag_res = {}
         for tag in required_tag:
-            tag_res[tag] = slices[0].get(tag, default=None)
+            val = slices[0].get(tag, default=None)
+            if val is not None:
+                val = val.value
+            tag_res[tag] = val
         if len(tag_res) == 1:
             tag_res = tag_res[required_tag[0]]
 
