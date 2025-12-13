@@ -74,7 +74,9 @@ class PatientInfoData:
                 if val <= 0:
                     raise ValueError(f'Invalid value {val=}')
                 build_dict[field_name] = val
-            # ... lots to check ...
+            else:
+                # ... lots to check ...
+                build_dict[field_name] = val
 
         return cls(**build_dict)
 
