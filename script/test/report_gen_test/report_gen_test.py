@@ -37,7 +37,7 @@ def main():
     ct_image = ct_image.astype(np.float32)
     labelmap = labelmap.astype(np.uint8)
     total_exec_time = 0
-    for i in range(11):
+    for i in range(3):
         time_start = time.perf_counter()
         _calculate_mean_hu(ct_image, labelmap)
         exec_time = time.perf_counter() - time_start
@@ -45,11 +45,11 @@ def main():
             continue
         print(f'Exec time: {exec_time:.2f} seconds.')
         total_exec_time += exec_time
-    avg_exec_time = total_exec_time / 10
+    avg_exec_time = total_exec_time / 2
     print(f'Average time {avg_exec_time:.2f} seconds per loop.')
 
     total_exec_time = 0
-    for i in range(11):
+    for i in range(3):
         ct_image_ = xp.to_cupy(ct_image)
         labelmap_ = xp.to_cupy(labelmap)
         time_start = time.perf_counter()
@@ -60,7 +60,7 @@ def main():
             continue
         print(f'Exec time: {exec_time:.2f} seconds.')
         total_exec_time += exec_time
-    avg_exec_time = total_exec_time / 10
+    avg_exec_time = total_exec_time / 2
     print(f'Average time {avg_exec_time:.2f} seconds per loop.')
 
     return
@@ -105,11 +105,12 @@ def _calculate_mean_hu(
     # Labelmap: (N, H, W) (500, 512, 512)
     res = []
     for class_id in range(n_classes):
-        mask = (labelmap == class_id)
-        if not mask.any():
-            res.append(None)
-            continue
-        res.append(image[mask].mean())
+        res.append((image * (labelmap == class_id)).mean())
+        # mask = (labelmap == class_id)
+        # if not mask.any():
+        #     res.append(None)
+        #     continue
+        # res.append(image[mask].mean())
     return res
 
 
