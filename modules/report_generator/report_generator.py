@@ -326,6 +326,7 @@ class ReportGenerator:
                 target = float(class_mean_hus[class_id])
                 if np.isfinite(mean) and np.isfinite(std) and np.isfinite(target) and target < mean - std:
                     class_low_target_table[class_id] = 1
+                    print(f'{group_name}: {class_id=}: {target=}, {mean=}, {std=}')
                 else:
                     class_low_target_table[class_id] = 0
                 box_drawing_data.append(figure_utils.BoxDrawingData(
