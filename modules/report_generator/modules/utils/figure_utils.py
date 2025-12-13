@@ -123,7 +123,6 @@ class FigureUtils:
             xmin, xmax = None, None
         else:
             xmin, xmax = xlim
-
         if xmin is None or xmax is None:
             xs = []
             for b in boxes:
@@ -131,7 +130,7 @@ class FigureUtils:
                     continue
                 xs.extend([b.mean, b.mean + b.std, b.mean - b.std, b.target])
             if xs:
-                _xmin, _xmax = cls.compute_lim(xs)
+                _xmin, _xmax = cls.compute_lim(xs, pad_ratio=0.05)
                 if xmin is None:
                     xmin = _xmin
                 if xmax is None:
@@ -255,5 +254,6 @@ class FigureUtils:
         h_pt = box_h_px * 72.0 / dpi
         return (h_pt * scale) ** 2
 
+compute_lim = FigureUtils.compute_lim
 draw_hu_boxes = FigureUtils.draw_hu_boxes
 star_size_points2_from_box_height = FigureUtils.star_size_points2_from_box_height

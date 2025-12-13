@@ -141,6 +141,8 @@ class ReportGenerator:
                 ]
             else:
                 raise ValueError(f'Invalid group data: {_source_dict}')
+            if len(class_ids) <= 0:
+                raise ValueError(f'Empty class IDs: {_source_dict}')
             return ClassGroupData(
                 name=_source_dict['group_name'],
                 class_ids=class_ids,
@@ -184,6 +186,18 @@ class ReportGenerator:
         min_canvas_h = min(canvas_heights) if canvas_heights else 400
         self._min_canvas_h = min_canvas_h
 
+        self._observation_messages = {
+            1: 'あなたの筋肉の質は、同性・同年代と比べて良好あるいは標準的な範囲にあります。'
+               'ただし、高齢になると平均的な値でも筋力低下や転倒リスクが高まることがありますので、'
+               '今後もバランスの良い食事と（できるだけお医者様や専門家指導の下で）適度な運動を続けることが大切です。',
+            2: 'あなたの筋肉の質は、同性・同年代と比べるとやや低めの傾向があります。'
+               '高齢期には筋肉の質のわずかな低下でも生活機能に影響が出ることがありますので、'
+               '（できるだけお医者様や専門家指導の下で）食事・運動を工夫し、'
+               '必要に応じて専門家のアドバイスを受けることをおすすめします。',
+            3: 'あなたの筋肉の質は、同性・同年代と比べて低い傾向が見られます。'
+               '高齢期では平均的な水準でも転倒や要介護のリスクが高まることが知られています。'
+               '早めに医療・リハビリ専門家にご相談されることをおすすめします。',
+        }
 
     def generate(
             self,
@@ -193,7 +207,7 @@ class ReportGenerator:
             class_mean_hus: npt.NDArray[np.float64],
             save_path: Path,
             fig_dpi=96,
-            device='cpu'
+            device='cpu',
     ):
         if labelmap.ndim != 3:
             raise ValueError('Labelmap must be 3D')
@@ -221,6 +235,16 @@ class ReportGenerator:
                 (pl.col('age_group_low') <= age)
                 & (pl.col('age_group_high') >= age)
             )
+        if class_mean_hus is None:
+            raise ValueError(f'class_mean_hus is required in patient_info')
+        class_mean_hus: npt.NDArray[np.float64]
+        all_visual_class_ids = set()
+        for class_group_data in self._class_groups.values():
+            if class_group_data is None:
+                continue
+            all_visual_class_ids.update(set(class_group_data.class_ids))
+        age_sex_hu_df = age_sex_hu_df.filter(
+            pl.col('class_id').is_in(all_visual_class_ids))
 
         max_rows = max(len(v.class_ids) for v in self._class_groups.values() if v is not None)
         row_gap_px = 8
@@ -229,6 +253,19 @@ class ReportGenerator:
         s_star_common = figure_utils.star_size_points2_from_box_height(
             common_box_height_px, dpi=fig_dpi, scale=1.5
         )
+        means, stds = age_sex_hu_df['mean', 'std'].to_numpy().astype(np.float64).T
+        xlim = figure_utils.compute_lim(
+            np.concatenate(
+                means,
+                means - stds,
+                means + stds,
+                class_mean_hus[
+                    np.asarray(all_visual_class_ids, dtype=np.int64)
+                ]
+            ),
+            pad_ratio=0.05
+        )
+        del means, stds, all_visual_class_ids
 
         def _mix_gaussians(_means, _vars, _weights=None):
             _means = np.asarray(_means, dtype=np.float64)
@@ -250,6 +287,8 @@ class ReportGenerator:
 
         report_ppt = self._report_ppt.copy()
         ppt_image_dict = {}
+        # Use dict to avoid duplicated class counts
+        class_low_target_table = {}
         # '1' to '10' box plots
         for idx, group_name in enumerate(self._class_groups.keys(), start=1):
             class_group_data = self._class_groups[group_name]
@@ -281,17 +320,24 @@ class ReportGenerator:
                     row = class_df.row(0, named=True)
                     mean, std = float(row['mean']), float(row['std'])
                     del row
+
                 del class_df
 
-                class_mean_hu = float(class_mean_hus[class_id])
+                target = float(class_mean_hus[class_id])
+                if np.isfinite(mean) and np.isfinite(std) and target < mean - std:
+                    class_low_target_table[class_id] = 1
+                else:
+                    class_low_target_table[class_id] = 0
                 box_drawing_data.append(figure_utils.BoxDrawingData(
-                    target=class_mean_hu,
+                    target=target,
                     mean=mean, std=std,
                     color=self._class_color_table[class_id][:3],
                 ))
+                del target
             box_figure = figure_utils.draw_hu_boxes(
                 boxes=box_drawing_data,
                 canvas_size_px=self._report_pptx_canvas_px[ppt_image_key],
+                xlim=xlim,
                 s_star=s_star_common,
                 box_height_px=common_box_height_px,
                 row_gap_px=row_gap_px,
@@ -299,6 +345,18 @@ class ReportGenerator:
             )
             ppt_image_dict[ppt_image_key] = box_figure
             del box_drawing_data, box_figure
+        low_target_ratio = sum(class_low_target_table.values()) / sum(
+            len(v.class_id) for v in self._class_groups.values() if v is not None)
+        # Determine observation
+        if low_target_ratio >= 0.5:
+            observation = self._observation_messages[3]
+        elif low_target_ratio >= 0.2:
+            observation = self._observation_messages[2]
+        else:
+            observation = self._observation_messages[1]
+        del low_target_ratio, class_low_target_table
+        report_ppt.fill_texts(self._build_text_placeholders(patient_info, observation))
+        del observation
 
         labelmap_renderer = LabelmapRenderer(
             labelmap=labelmap.astype(np.int16, copy=False), spacing=spacing,
@@ -381,33 +439,31 @@ class ReportGenerator:
         report_ppt.fill_images(fill_images)
         report_ppt.save(save_path)
 
+    @staticmethod
     def _build_text_placeholders(
-            self,
-            name,
-            sex,
-            age,
-            birth_year,
-            birth_month,
-            birth_day,
-            height,
-            weight,
-            shooting_year,
-            shooting_month,
-            shooting_day,
+            patient_info: Optional[PatientInfoData] = None,
+            observation_message: Optional[str] = None,
+            default_str: str = '-'
     ):
-        return {
-            'NAME': name,
-            'SEX': sex,
-            'BIRTH_YEAR': birth_year,
-            'BIRTH_MONTH': birth_month,
-            'BIRTH_DAY': birth_day,
-            'HEIGHT': height,
-            'WEIGHT': weight,
-            'AGE': age,
-            'SHOOTING_YEAR': shooting_year,
-            'SHOOTING_MONTH': shooting_month,
-            'SHOOTING_DAY': shooting_day,
+        if patient_info is None:
+            patient_info = PatientInfoData()
+        placeholders = {
+            'NAME': patient_info.name,
+            'SEX': patient_info.sex,
+            'BIRTH_YEAR': patient_info.birth_year,
+            'BIRTH_DAY': patient_info.birth_day,
+            'HEIGHT': patient_info.height,
+            'WEIGHT': patient_info.weight,
+            'AGE': patient_info.age,
+            'SHOOTING_YEAR': patient_info.shooting_year,
+            'SHOOTING_MONTH': patient_info.shooting_month,
+            'SHOOTING_DAY': patient_info.shooting_day,
+            'OBSERVATIONS': observation_message,
         }
+        for k, v in placeholders:
+            if v is None:
+                placeholders[k] = default_str
+        return placeholders
 
     @staticmethod
     def _read_dataframe(read_path: Path) -> pl.DataFrame:

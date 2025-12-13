@@ -29,7 +29,6 @@ def main():
     labelmap_path = this_dir / 'pred_label.mha'
     ct_path = this_dir / 'UZU00001_CT1'
 
-
     labelmap, spacing, _ = metaimage_utils.read(labelmap_path)
     labelmap = labelmap.astype(np.uint8)
     ct_image, s, _ = dicom_utils.read_dicom_folder(
@@ -51,11 +50,14 @@ def main():
         class_groups=class_groups_path,
     )
     report_generator.generate(
+        patient_info={
+            'name': 'Taro',
+            'sex': sex,
+            'age': age,
+        },
         labelmap=labelmap,
         spacing=spacing,
         class_mean_hus=mean_hus,
-        sex=sex,
-        age=age,
         save_path=output_dir / 'report.pptx',
         device='cuda',
     )
