@@ -92,8 +92,7 @@ def _calculate_mean_hu(
     class_voxels = labelmap.sum((0, 1, 2))
     hus = total_hu / class_voxels
     print(np.isclose(res, hus))
-    print(res)
-    print(hus)
+    print(res-hus)
     print(f'Elapsed time: {time.perf_counter() - start_time:.3f} sec')
 
     return res
