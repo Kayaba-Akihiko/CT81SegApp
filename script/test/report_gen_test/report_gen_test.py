@@ -72,9 +72,13 @@ def _calculate_mean_hu(
         image: npt.NDArray, labelmap: npt.NDArray[np.integer],
         n_classes: int = 81,
 ):
+    labelmap = np.where(labelmap > 2, 0, labelmap)
+    n_classes = 3
+    labelmap = labelmap.astype(np.int64)
+
     start_time = time.perf_counter()
     res = []
-    image = image.astype(np.float32)
+    image = image.astype(np.float64)
     for class_id in range(n_classes):
         mask = labelmap == class_id
         if not np.any(mask):
@@ -91,9 +95,10 @@ def _calculate_mean_hu(
     total_hu = image.sum((0, 1, 2))
     class_voxels = labelmap.sum((0, 1, 2))
     hus = total_hu / class_voxels
+    print(f'Elapsed time: {time.perf_counter() - start_time:.3f} sec')
     print(np.isclose(res, hus))
     print(res-hus)
-    print(f'Elapsed time: {time.perf_counter() - start_time:.3f} sec')
+
 
     return res
 
