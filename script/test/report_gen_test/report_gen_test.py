@@ -50,7 +50,7 @@ def main():
     report_ppt = report_generator.generate(
         patient_info={
             'name': 'Taro',
-            'sex': sex,
+            # 'sex': sex,
             'age': age,
         },
         labelmap=labelmap,

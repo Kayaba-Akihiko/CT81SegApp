@@ -57,7 +57,6 @@ class PatientInfoData:
             key_l = key.lower()
 
             if key_l not in field_map:
-                print(f'Warning: Unknown key {key!r} in patient info dict')
                 continue  # ignore unknown keys
 
             field_name = field_map[key_l]
@@ -462,7 +461,6 @@ class ReportGenerator:
     ) -> Dict[str, str]:
         if patient_info is None:
             patient_info = PatientInfoData()
-        print(patient_info)
         language = language.lower()
 
         placeholders = {
