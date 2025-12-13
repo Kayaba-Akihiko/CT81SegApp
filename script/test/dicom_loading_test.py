@@ -21,7 +21,7 @@ def main():
         name_regex=".*",
         n_workers=8,
         progress_bar=True,
-        required_tag=['PatientsName', 'PatientsAge']
+        required_tag=['PN', 'CS', 'AS', 'DS']  # Name, Sex, Age, Weight
     )
     print(tags)
 
