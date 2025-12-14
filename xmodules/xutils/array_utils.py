@@ -552,15 +552,11 @@ class ArrayUtils:
             dtype = cls.convert_dtype_to_torch(dtype)
         if device is not None:
             device = cls.convert_device_to_torch(device)
-        if isinstance(array, np.ndarray):
-            # skip array of string classes and object, refer to:
-            # https://github.com/pytorch/pytorch/blob/v1.9.0/torch/utils/data/_utils/collate.py#L13
-            if re.search(r"[SaUO]", array.dtype.str) is None:
-                # numpy array with 0 dims is also sequence iterable,
-                # `ascontiguousarray` will add 1 dim if img has no dim, so we only apply on data with dims
-                if array.ndim > 0:
-                    array = np.ascontiguousarray(array)
+
         if isinstance(array, torch.Tensor):
+            if dtype is None and device is None:
+                # Do nothing
+                return array
             non_blocking = True
             if device is not None and device.type in TORCH_BLOCKING_DEVICES:
                 non_blocking = False
@@ -569,6 +565,20 @@ class ArrayUtils:
             if data_out is not None:
                 return data_out
             return array
+
+        if isinstance(array, np.ndarray):
+            # skip array of string classes and object, refer to:
+            # https://github.com/pytorch/pytorch/blob/v1.9.0/torch/utils/data/_utils/collate.py#L13
+            if re.search(r"[SaUO]", array.dtype.str) is None:
+                # numpy array with 0 dims is also sequence iterable,
+                # `ascontiguousarray` will add 1 dim if img has no dim, so we only apply on data with dims
+                if array.ndim > 0:
+                    array = np.ascontiguousarray(array)
+        elif HAS_CUPY and isinstance(array, cp.ndarray):
+            if re.search(r"[SaUO]", array.dtype.str) is None:
+                if array.ndim > 0:
+                    array = cp.ascontiguousarray(array)
+
         return torch.as_tensor(array, dtype=dtype, device=device)
 
     @classmethod
@@ -1536,7 +1546,9 @@ class ArrayUtils:
     @classmethod
     def concatenate[T: TypeArrayLike[NPGeneric]](
             cls,
-            arrays: Union[List[T], Tuple[T, ...]], axis: int = 0
+            arrays: Union[List[T], Tuple[T, ...]],
+            axis: int = 0,
+            dtype: Optional[TypeDTypeLike] = None,
     ) -> T:
         if not isinstance(arrays, (list, tuple)):
             raise TypeError(f"Expected list or tuple, got {type(arrays)}.")
@@ -1547,13 +1559,20 @@ class ArrayUtils:
         array0 = arrays[0]
         if isinstance(array0, np.ndarray):
             to_array_fn = cls.to_numpy
-            cat_fn = functools.partial(np.concatenate, axis=axis)
+            if dtype is not None:
+                dtype = cls.convert_dtype_to_numpy(dtype)
+            cat_fn = functools.partial(np.concatenate, axis=axis, dtype=dtype)
         elif HAS_CUPY and isinstance(array0, cp.ndarray):
             to_array_fn = functools.partial(cls.to_cupy, device=array0.device)
-            cat_fn = functools.partial(cp.concatenate, axis=axis)
+            if dtype is not None:
+                dtype = cls.convert_dtype_to_numpy(dtype)
+            cat_fn = functools.partial(cp.concatenate, axis=axis, dtype=dtype)
         elif HAS_TORCH and isinstance(array0, torch.Tensor):
             to_array_fn = functools.partial(cls.to_torch, device=array0.device)
-            cat_fn = functools.partial(torch.cat, dim=axis)
+            def cat_fn(_arrays):
+                _cat_array = torch.cat(arrays, dim=axis)
+                return cls.to_torch(_cat_array, dtype=dtype)
+
         else:
             raise TypeError(
                 f"Unsupported array type: {type(array0)}. "
