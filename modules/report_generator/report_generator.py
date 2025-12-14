@@ -19,6 +19,7 @@ import polars as pl
 
 from xmodules.xutils import vtk_utils, os_utils
 from xmodules.typing import TypePathLike
+from xmodules.xdistributor.protocol import DistributorProtocol
 
 from .modules.report_ppt import ReportPPT, PPTXPresentation, FillImageData as ReportFillImageData, TypeFitMode as TypeReportFitMode
 from .modules.labelmap_renderer import LabelmapRenderer
@@ -108,6 +109,7 @@ class ReportGenerator:
 
     def __init__(
             self,
+            distributor: DistributorProtocol,
             template_ppt: Union[PPTXPresentation, TypePathLike],
             hu_statistics_table: Union[pl.DataFrame, TypePathLike],
             rendering_config: Union[Dict[str, Any], TypePathLike],
@@ -117,39 +119,51 @@ class ReportGenerator:
                 Tuple[Union[ClassGroupData, Dict[str, Any]], ...],
                 TypePathLike,
             ],
-            observation_message: Union[Dict[int, str], TypePathLike],
+            observation_messages: Union[Dict[int, str], TypePathLike],
     ):
+        self._distributor = distributor
         if os_utils.is_path_like(template_ppt):
             template_ppt = os_utils.format_path_string(template_ppt)
         self._report_ppt = ReportPPT(template_ppt)
 
-        if os_utils.is_path_like(hu_statistics_table):
-            self._hu_statistics_df = self._read_dataframe(
-                os_utils.format_path_string(hu_statistics_table))
-        elif isinstance(hu_statistics_table, pl.DataFrame):
-            self._hu_statistics_df = hu_statistics_table.clone()
-        else:
-            raise TypeError(f'Invalid hu_statistics_table type: {type(hu_statistics_table)=}')
+        self._hu_statistics_df = None
+        if self._distributor.is_main_process():
+            if os_utils.is_path_like(hu_statistics_table):
+                self._hu_statistics_df = self._read_dataframe(
+                    os_utils.format_path_string(hu_statistics_table))
+            elif isinstance(hu_statistics_table, pl.DataFrame):
+                self._hu_statistics_df = hu_statistics_table.clone()
+            else:
+                raise TypeError(f'Invalid hu_statistics_table type: {type(hu_statistics_table)=}')
+        if self._distributor.is_distributed():
+            self._hu_statistics_df = distributor.broadcast_object(
+                self._hu_statistics_df)
 
-
-        if os_utils.is_path_like(rendering_config):
-            with os_utils.format_path_string(rendering_config).open('rb') as f:
-                rendering_config = json.load(f)
-        elif isinstance(rendering_config, dict):
-            rendering_config = copy.deepcopy(rendering_config)
-        else:
-            raise TypeError(f'Invalid rendering_config type: {type(rendering_config)=}')
+        if self._distributor.is_main_process():
+            if os_utils.is_path_like(rendering_config):
+                with os_utils.format_path_string(rendering_config).open('rb') as f:
+                    rendering_config = json.load(f)
+            elif isinstance(rendering_config, dict):
+                rendering_config = copy.deepcopy(rendering_config)
+            else:
+                raise TypeError(f'Invalid rendering_config type: {type(rendering_config)=}')
+        if self._distributor.is_distributed():
+            rendering_config = distributor.broadcast_object(rendering_config)
 
         self._skin_class_id = rendering_config.pop('skin_class_id')
         self._rendering_config = rendering_config
 
-        if os_utils.is_path_like(class_info_table):
-            self._class_info_df = self._read_dataframe(
-                os_utils.format_path_string(class_info_table))
-        elif isinstance(class_info_table, pl.DataFrame):
-            self._class_info_df = class_info_table.clone()
-        else:
-            raise TypeError(f'Invalid class_info_table type: {type(class_info_table)=}')
+        self._class_info_df = None
+        if self._distributor.is_main_process():
+            if os_utils.is_path_like(class_info_table):
+                self._class_info_df = self._read_dataframe(
+                    os_utils.format_path_string(class_info_table))
+            elif isinstance(class_info_table, pl.DataFrame):
+                self._class_info_df = class_info_table.clone()
+            else:
+                raise TypeError(f'Invalid class_info_table type: {type(class_info_table)=}')
+        if self._distributor.is_distributed():
+            self._class_info_df = self._distributor.broadcast_object(self._class_info_df)
 
         color_table = OrderedDict()
         class_name_to_id_map = {}
@@ -184,29 +198,33 @@ class ReportGenerator:
                 rendering_view=_source_dict['rendering_view'],
             )
 
-        class_groups_ = OrderedDict()
-        if isinstance(class_groups, Path):
-            with class_groups.open('rb') as f:
-                json_data = json.load(f)
-            for line_dict in json_data:
-                group_data = _create_group_data_from_dict(line_dict)
-                if group_data.name in class_groups_:
-                    raise ValueError(f'Duplicate group name: {group_data.name}')
-                class_groups_[group_data.name] = group_data
-            del json_data
-        elif isinstance(class_groups, (list, tuple)):
-            for group_data in class_groups:
-                if isinstance(group_data, dict):
-                    group_data = _create_group_data_from_dict(group_data)
-                elif isinstance(group_data, ClassGroupData):
-                    pass
-                else:
-                    raise ValueError(f'Invalid group data: {group_data}')
-                if group_data.name in class_groups_:
-                    raise ValueError(f'Duplicate group name: {group_data.name}')
-                class_groups_[group_data.name] = group_data
-        else:
-            raise ValueError(f'Invalid class groups: {class_groups}')
+        class_groups_ = None
+        if self._distributor.is_main_process():
+            class_groups_ = OrderedDict()
+            if isinstance(class_groups, Path):
+                with class_groups.open('rb') as f:
+                    json_data = json.load(f)
+                for line_dict in json_data:
+                    group_data = _create_group_data_from_dict(line_dict)
+                    if group_data.name in class_groups_:
+                        raise ValueError(f'Duplicate group name: {group_data.name}')
+                    class_groups_[group_data.name] = group_data
+                del json_data
+            elif isinstance(class_groups, (list, tuple)):
+                for group_data in class_groups:
+                    if isinstance(group_data, dict):
+                        group_data = _create_group_data_from_dict(group_data)
+                    elif isinstance(group_data, ClassGroupData):
+                        pass
+                    else:
+                        raise ValueError(f'Invalid group data: {group_data}')
+                    if group_data.name in class_groups_:
+                        raise ValueError(f'Duplicate group name: {group_data.name}')
+                    class_groups_[group_data.name] = group_data
+            else:
+                raise ValueError(f'Invalid class groups: {class_groups}')
+        if self._distributor.is_distributed():
+            class_groups_ = self._distributor.broadcast_object(class_groups_)
         self._class_groups = class_groups_
         del class_groups_
         self._n_groups = 10
@@ -221,20 +239,24 @@ class ReportGenerator:
         min_canvas_h = min(canvas_heights) if canvas_heights else 400
         self._min_canvas_h = min_canvas_h
 
-        if os_utils.is_path_like(observation_message):
-            with os_utils.format_path_string(observation_message).open('rb') as f:
-                observation_message = json.load(f)
-        elif isinstance(observation_message, dict):
-            observation_message = copy.deepcopy(observation_message)
-        else:
-            raise TypeError(f'Invalid observation_message type: {type(observation_message)=}')
+        if self._distributor.is_main_process():
+            if os_utils.is_path_like(observation_messages):
+                with os_utils.format_path_string(observation_messages).open('rb') as f:
+                    observation_messages = json.load(f)
+            elif isinstance(observation_messages, dict):
+                observation_messages = copy.deepcopy(observation_messages)
+            else:
+                raise TypeError(f'Invalid observation_message type: {type(observation_messages)=}')
 
-        for k, v in observation_message.items():
-            if k not in range(1, 4):
-                raise ValueError(f'Invalid observation message key: {k}')
-            if not isinstance(v, str):
-                raise TypeError(f'Invalid observation message value: {v}')
-        self._observation_message = observation_message
+            for k, v in observation_messages.items():
+                if k not in range(1, 4):
+                    raise ValueError(f'Invalid observation message key: {k}')
+                if not isinstance(v, str):
+                    raise TypeError(f'Invalid observation message value: {v}')
+        if self._distributor.is_distributed():
+            observation_messages = self._distributor.broadcast_object(observation_messages)
+        assert isinstance(observation_messages, dict)
+        self._observation_messages = observation_messages
         #
         # self._observation_messages = {
         #     1: 'あなたの筋肉の質は、同性・同年代と比べて良好あるいは標準的な範囲にあります。'
@@ -365,11 +387,21 @@ class ReportGenerator:
             return _mu, _var
 
         report_ppt = self._report_ppt.copy()
-        ppt_image_dict = {}
+
+        # '1' to '10' box plots
+        box_jobs = list(enumerate(self._class_groups.keys(), start=1))
+        if self._distributor.is_distributed():
+            if len(box_jobs) < self._distributor.world_size:
+                raise ValueError(f'')
+            n_jobs_per_rank = (len(box_jobs) + self._distributor.world_size - 1) // self._distributor.world_size
+            start = self._distributor.global_rank * n_jobs_per_rank
+            end = start + n_jobs_per_rank
+            box_jobs = box_jobs[start: end]
+
         # Use dict to avoid duplicated class counts
         class_low_target_table = {}
-        # '1' to '10' box plots
-        for idx, group_name in enumerate(self._class_groups.keys(), start=1):
+        ppt_image_dict = {}
+        for idx, group_name in box_jobs:
             class_group_data = self._class_groups[group_name]
             if class_group_data is None:
                 continue
@@ -425,6 +457,13 @@ class ReportGenerator:
             )
             ppt_image_dict[ppt_image_key] = box_figure
             del box_drawing_data, box_figure
+        if self._distributor.is_distributed():
+            for rank_dict in self._distributor.all_gather_object(ppt_image_dict):
+                ppt_image_dict.update(rank_dict)
+
+            for rank_dict in self._distributor.all_gather_object(class_low_target_table):
+                class_low_target_table.update(rank_dict)
+
         low_target_ratio = sum(class_low_target_table.values()) / len(class_low_target_table)
         # Determine observation
         if low_target_ratio >= 0.5:
@@ -452,25 +491,38 @@ class ReportGenerator:
             occlusion_ratio=self._rendering_config.get('occlusion_ratio', None),
         )
 
-        front_view, back_view = labelmap_renderer.render(
-            view=['front', 'back'],
-            class_color_table=self._class_color_table,
-            camera_offset=2500.0,
-            shade=self._rendering_config.get('shade', None),
-            specular=self._rendering_config.get('specular', None),
-            specular_power=self._rendering_config.get('specular_power', None),
-            ambient=self._rendering_config.get('ambient', None),
-            diffuse=self._rendering_config.get('diffuse', None),
-            scalar_opacity_unit_distance=self._rendering_config.get('scalar_opacity_unit_distance', None),
-            blend_mode=self._rendering_config.get('blend_mode', None),
-            device=device,
-        )
+        front_view, back_view = None, None
+        if self._distributor.is_distributed():
+            front_view, back_view = labelmap_renderer.render(
+                view=['front', 'back'],
+                class_color_table=self._class_color_table,
+                camera_offset=2500.0,
+                shade=self._rendering_config.get('shade', None),
+                specular=self._rendering_config.get('specular', None),
+                specular_power=self._rendering_config.get('specular_power', None),
+                ambient=self._rendering_config.get('ambient', None),
+                diffuse=self._rendering_config.get('diffuse', None),
+                scalar_opacity_unit_distance=self._rendering_config.get('scalar_opacity_unit_distance', None),
+                blend_mode=self._rendering_config.get('blend_mode', None),
+                device=device,
+            )
+        if self._distributor.is_distributed():
+            front_view, back_view = self._distributor.broadcast_object(front_view, back_view)
         # '11' '12' full label view
         ppt_image_dict['11'] = front_view
         ppt_image_dict['12'] = back_view
         del front_view, back_view
 
-        for insert_idx, group_name in enumerate(self._class_groups, start=15):
+        rendering_jobs = list(enumerate(self._class_groups, start=15))
+        if self._distributor.is_distributed():
+            if len(rendering_jobs) < self._distributor.world_size:
+                raise ValueError(f'')
+            n_jobs_per_rank = (len(rendering_jobs) + self._distributor.world_size - 1) // self._distributor.world_size
+            start = self._distributor.global_rank * n_jobs_per_rank
+            end = start + n_jobs_per_rank
+            rendering_jobs = rendering_jobs[start: end]
+        ppt_image_dict_ = {}
+        for insert_idx, group_name in rendering_jobs:
             class_group_data = self._class_groups[group_name]
             if class_group_data is None:
                 continue
@@ -497,8 +549,14 @@ class ReportGenerator:
                 out_size=(1500, 2000),
                 device=device,
             )
-            ppt_image_dict[f'{insert_idx:02d}'] = rendered_image
+            ppt_image_dict_[f'{insert_idx:02d}'] = rendered_image
             del rendered_image
+        if self._distributor.is_distributed():
+            for rank_dict in self._distributor.all_gather_object(ppt_image_dict_):
+                ppt_image_dict_.update(rank_dict)
+
+        ppt_image_dict.update(ppt_image_dict_)
+        del ppt_image_dict_
 
         ppt_image_dict['13'] = ppt_image_dict['19'].copy()
         ppt_image_dict['14'] = ppt_image_dict['20'].copy()

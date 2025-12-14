@@ -12,7 +12,7 @@ from pathlib import Path
 import time
 import copy
 import traceback
-from typing import Tuple, List, Dict, Union, Literal
+from typing import Tuple, List, Dict, Union, Literal, OrderedDict
 
 import numpy as np
 import numpy.typing as npt
@@ -218,22 +218,23 @@ class Main:
         rendering_config = resources_root / 'rendering_config.json'
         class_table_path = resources_root / 'class_table.csv'
         class_groups_path = resources_root / 'class_groups.json'
-        observation_message_path = resources_root / 'observation_messages.json'
+        observation_messages_path = resources_root / 'observation_messages.json'
         self._check_path_exists(
             template_path, hu_statistics_table_path, rendering_config,
-            class_table_path, class_groups_path, observation_message_path,
+            class_table_path, class_groups_path, observation_messages_path,
         )
         config_load_time_start = None
         if distributor.is_main_process():
             config_load_time_start = time.perf_counter()
             _logger.info('Loading configuration...')
         report_generator = ReportGenerator(
+            distributor=distributor,
             template_ppt=template_path,
             hu_statistics_table=hu_statistics_table_path,
             rendering_config=rendering_config,
             class_info_table=class_table_path,
             class_groups=class_groups_path,
-            observation_message=observation_message_path,
+            observation_messages=observation_messages_path,
         )
         config_load_time = None
         if distributor.is_main_process():
@@ -366,18 +367,67 @@ class Main:
             _logger.info(f'HU table saving time: {hu_table_save_time:.2f} seconds.')
             del hu_df
 
-        labelmap = xp.to_numpy(pred_label)
+        labelmap: npt.NDArray[np.uint8] = xp.to_numpy(pred_label).astype(np.uint8, copy=False)
         labelmap_save_time = None
         if distributor.is_main_process():
             labelmap_save_time_start = time.perf_counter()
             metaimage_utils.write(
                 output_dir / 'labelmap.mhd',
-                labelmap.astype(np.int16),
+                labelmap.astype(np.int16, copy=False),
                 spacing=spacing,
                 position=position,
             )
             labelmap_save_time = time.perf_counter() - labelmap_save_time_start
             _logger.info(f'Labelmap saving time: {labelmap_save_time:.2f} seconds.')
+
+
+        report_rendering_time_start = None
+        if distributor.is_main_process():
+            report_rendering_time_start = time.perf_counter()
+        report_ppt = report_generator.generate_report(
+            patient_info=patient_info,
+            labelmap=labelmap,
+            spacing=spacing,
+            class_mean_hus=class_mean_hus,
+            device='cuda',
+        )
+        report_rendering_time = None
+        if distributor.is_main_process():
+            report_rendering_time = time.perf_counter() - report_rendering_time_start
+            _logger.info(f'Report rendering time: {report_rendering_time:.2f} seconds.')
+
+        report_saving_time = None
+        if distributor.is_main_process():
+            report_saving_time_start = time.perf_counter()
+            report_ppt.save(
+                pdf_save_path=output_dir / 'report.pdf',
+                image_save_path=output_dir / 'report.png',
+            )
+            report_saving_time = time.perf_counter() - report_saving_time_start
+            _logger.info(f'Report saving time: {report_saving_time:.2f} seconds.')
+
+        total_time = None
+        if distributor.is_main_process():
+            total_time = time.perf_counter() - total_time_start
+            _logger.info(f'Total time: {total_time:.2f} seconds.')
+
+        if distributor.is_main_process():
+            time_summary = OrderedDict()
+            time_summary['Config loading'] = config_load_time
+            time_summary['Model loading'] = model_data_load_time
+            time_summary['Image loading'] = image_load_time
+            time_summary['Model inference'] = model_inference_time
+            time_summary['Class mean HU calculation'] = mean_hu_calc_time
+            time_summary['HU table saving'] = hu_table_save_time
+            time_summary['Labelmap saving'] = labelmap_save_time
+            time_summary['Report rendering'] = report_rendering_time
+            time_summary['Report saving'] = report_saving_time
+            time_summary['Total'] = total_time
+            _logger.info(
+                f'\n ---- Time summary ----\n'
+                f'{json.dumps(time_summary, indent=2)}'
+                f'\n ---- End of time summary ----'
+            )
 
     @staticmethod
     def _read_image(
