@@ -541,7 +541,7 @@ class ArrayUtils:
                 try:
                     array = cp.asarray(array, dtype)
                 except ValueError as e:
-                    print(dtype)
+                    print(dtype, type(array))
                     raise e
         return array
 
