@@ -116,7 +116,8 @@ class ReportGenerator:
                 List[Union[ClassGroupData, Dict[str, Any]]],
                 Tuple[Union[ClassGroupData, Dict[str, Any]], ...],
                 TypePathLike,
-            ]
+            ],
+            observation_message: Union[Dict[int, str], TypePathLike],
     ):
         if os_utils.is_path_like(template_ppt):
             template_ppt = os_utils.format_path_string(template_ppt)
@@ -220,18 +221,33 @@ class ReportGenerator:
         min_canvas_h = min(canvas_heights) if canvas_heights else 400
         self._min_canvas_h = min_canvas_h
 
-        self._observation_messages = {
-            1: 'あなたの筋肉の質は、同性・同年代と比べて良好あるいは標準的な範囲にあります。'
-               'ただし、高齢になると平均的な値でも筋力低下や転倒リスクが高まることがありますので、'
-               '今後もバランスの良い食事と（できるだけお医者様や専門家指導の下で）適度な運動を続けることが大切です。',
-            2: 'あなたの筋肉の質は、同性・同年代と比べるとやや低めの傾向があります。'
-               '高齢期には筋肉の質のわずかな低下でも生活機能に影響が出ることがありますので、'
-               '（できるだけお医者様や専門家指導の下で）食事・運動を工夫し、'
-               '必要に応じて専門家のアドバイスを受けることをおすすめします。',
-            3: 'あなたの筋肉の質は、同性・同年代と比べて低い傾向が見られます。'
-               '高齢期では平均的な水準でも転倒や要介護のリスクが高まることが知られています。'
-               '早めに医療・リハビリ専門家にご相談されることをおすすめします。',
-        }
+        if os_utils.is_path_like(observation_message):
+            with os_utils.format_path_string(observation_message).open('rb') as f:
+                observation_message = json.load(f)
+        elif isinstance(observation_message, dict):
+            observation_message = copy.deepcopy(observation_message)
+        else:
+            raise TypeError(f'Invalid observation_message type: {type(observation_message)=}')
+
+        for k, v in observation_message.items():
+            if k not in range(1, 4):
+                raise ValueError(f'Invalid observation message key: {k}')
+            if not isinstance(v, str):
+                raise TypeError(f'Invalid observation message value: {v}')
+        self._observation_message = observation_message
+        #
+        # self._observation_messages = {
+        #     1: 'あなたの筋肉の質は、同性・同年代と比べて良好あるいは標準的な範囲にあります。'
+        #        'ただし、高齢になると平均的な値でも筋力低下や転倒リスクが高まることがありますので、'
+        #        '今後もバランスの良い食事と（できるだけお医者様や専門家指導の下で）適度な運動を続けることが大切です。',
+        #     2: 'あなたの筋肉の質は、同性・同年代と比べるとやや低めの傾向があります。'
+        #        '高齢期には筋肉の質のわずかな低下でも生活機能に影響が出ることがありますので、'
+        #        '（できるだけお医者様や専門家指導の下で）食事・運動を工夫し、'
+        #        '必要に応じて専門家のアドバイスを受けることをおすすめします。',
+        #     3: 'あなたの筋肉の質は、同性・同年代と比べて低い傾向が見られます。'
+        #        '高齢期では平均的な水準でも転倒や要介護のリスクが高まることが知られています。'
+        #        '早めに医療・リハビリ専門家にご相談されることをおすすめします。',
+        # }
 
     def generate_hu_table(
             self,

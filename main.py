@@ -64,7 +64,7 @@ class Main:
             '--device',
             type=str,
             choices=['cpu', 'cuda'],
-            default='cuda' if xp.is_cuda_available() else 'cpu',
+            default='cuda' if ort.get_device().lower() == 'gpu' else 'cpu',
         )
         parser.add_argument(
             '--image_process_device',
@@ -218,9 +218,10 @@ class Main:
         rendering_config = resources_root / 'rendering_config.json'
         class_table_path = resources_root / 'class_table.csv'
         class_groups_path = resources_root / 'class_groups.json'
+        observation_message_path = resources_root / 'observation_messages.json'
         self._check_path_exists(
             template_path, hu_statistics_table_path, rendering_config,
-            class_table_path, class_groups_path,
+            class_table_path, class_groups_path, observation_message_path,
         )
         config_load_time_start = None
         if distributor.is_main_process():
@@ -232,6 +233,7 @@ class Main:
             rendering_config=rendering_config,
             class_info_table=class_table_path,
             class_groups=class_groups_path,
+            observation_message=observation_message_path,
         )
         config_load_time = None
         if distributor.is_main_process():
@@ -315,7 +317,7 @@ class Main:
             progress_desc='Inferencing',
         )
         if distributor.is_distributed():
-            pred_label = xp.concatenate(self._gather_in_rank_order(distributor, pred_label))
+            pred_label = xp.concatenate(distributor.all_gather_object(pred_label))
         model_inference_time = None
         if distributor.is_main_process():
             model_inference_time = time.perf_counter() - start_time
@@ -470,8 +472,8 @@ class Main:
             hu_results.append(xp.to(image[mask], dtype=process_dtype).mean().item())
             voxel_results.append(mask.sum().item())
         if distributor.is_distributed():
-            hu_results = sum(self._gather_in_rank_order(hu_results), [])
-            voxel_results = sum(self._gather_in_rank_order(voxel_results), [])
+            hu_results = sum(distributor.all_gather_object(hu_results), [])
+            voxel_results = sum(distributor.all_gather_object(voxel_results), [])
         hu_results = xp.to_dst(hu_results, dst=image, dtype=np.float64)
         voxel_results = xp.to_dst(voxel_results, dst=image, dtype=np.int64)
         volume_results = xp.to(voxel_results, dtype='float64') * spacing.prod().item() * 1e-3  # mm3 -> cm3
