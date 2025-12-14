@@ -233,7 +233,36 @@ class ReportGenerator:
                '早めに医療・リハビリ専門家にご相談されることをおすすめします。',
         }
 
-    def generate(
+    def generate_hu_table(
+            self,
+            class_mean_hus: npt.NDArray[np.float64],
+            class_volumes: npt.NDArray[np.float64],
+    ) -> pl.DataFrame:
+        def _check(_array: npt.NDArray):
+            if not isinstance(_array, np.ndarray):
+                raise TypeError(f'Invalid array type: {type(_array)}')
+            if not _array.ndim == 1:
+                raise ValueError(f'Invalid array shape: {_array.shape}')
+            if not len(_array) == len(self._class_id_to_name_map):
+                raise ValueError(f'Invalid array length: {_array.shape}')
+        _check(class_mean_hus)
+        _check(class_volumes)
+
+        # Build data
+        res_df_data = []
+        for class_id, class_name in self._class_id_to_name_map.items():
+            if class_id == 0:
+                continue
+            res_df_data.append({
+                'Structure ID': class_id,
+                'Structure name': class_name,
+                'Mean HU': class_mean_hus[class_id],
+                'Volume [cm^3]': class_volumes[class_id],
+            })
+        res_df = pl.DataFrame(res_df_data).sort(by='Structure ID')
+        return res_df
+
+    def generate_report(
             self,
             patient_info: Union[PatientInfoData, Dict[str, Any]],
             labelmap: npt.NDArray[np.integer],

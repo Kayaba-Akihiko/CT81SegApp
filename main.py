@@ -26,19 +26,15 @@ from xmodules.xqct2bmd.inferencer import Inferencer
 
 from modules.report_generator import ReportGenerator, PatientInfoData
 
-from lightning.fabric.accelerators import CPUAccelerator, CUDAAccelerator, MPSAccelerator, XLAAccelerator
-
 HAS_FABRIC = lib_utils.import_available('lightning.fabric')
+THIS_FILE = Path(__file__)
+THIS_DIR = THIS_FILE.parent
 
 logging.setLoggerClass(Logger)
-
 _logger = logging.getLogger(__name__)
 
 
 def main():
-    this_file = Path(__file__)
-    this_dir = this_file.parent
-
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
@@ -160,33 +156,22 @@ def main():
         _logger.info(f'Using distributor accelerator {opt.accelerator}')
         _logger.info(f'Using distributor devices: {opt.devices}')
 
+    resources_root = THIS_DIR / 'resources'
+    _check_path_exists(resources_root)
+
     image_path = os_utils.format_path_string(opt.image_path)
-    if not image_path.exists():
-        raise FileNotFoundError(f'Image path {image_path} not found.')
+    _check_path_exists(image_path)
     model_name = opt.model
     if model_name is None:
         model_name = 'nnunet_1res_ct_81_seg'
     if distributor.is_main_process():
         _logger.info(f'Using model {model_name}.')
-    model_load_path = this_dir / 'resources' / f'{model_name}.onnx'
-    if not model_load_path.exists():
-        raise FileNotFoundError(
-            f'Model {model_name} not found: {model_load_path}')
-    norm_config_load_path = this_dir / 'resources' / f'{model_name}.json'
-    if not norm_config_load_path.exists():
-        raise FileNotFoundError(
-            f'Normalization config {model_name} not found: {norm_config_load_path}')
 
     n_classes = 81
     resolution = 512
     batch_size = opt.batch_size
     if batch_size <= 0:
         raise ValueError(f'Invalid batch size: {batch_size=}')
-
-    rendering_config_path = this_dir / 'resources' / 'rendering_config.json'
-    if not rendering_config_path.exists():
-        raise FileNotFoundError(
-            f'Rendering config not found: {rendering_config_path}')
 
     n_workers = max(0, min(opt.n_workers, os_utils.get_max_n_worker()))
     if distributor.is_main_process():
@@ -211,10 +196,41 @@ def main():
     # ----
     # Load every things
     # ----
+
+    # Load configuration
+    template_path = resources_root / 'MICBON_AI_report_template_p3.pptx'
+    hu_statistics_table_path = resources_root / 'hu_statistics.xlsx'
+    rendering_config = resources_root / 'rendering_config.json'
+    class_table_path = resources_root / 'class_table.csv'
+    class_groups_path = resources_root / 'class_groups.json'
+    _check_path_exists(
+        template_path, hu_statistics_table_path, rendering_config,
+        class_table_path, class_groups_path,
+    )
+    config_load_time_start = None
+    if distributor.is_main_process():
+        config_load_time_start = time.perf_counter()
+        _logger.info('Loading configuration...')
+    report_generator = ReportGenerator(
+        template_ppt=template_path,
+        hu_statistics_table=hu_statistics_table_path,
+        rendering_config=rendering_config,
+        class_info_table=class_table_path,
+        class_groups=class_groups_path,
+    )
+    config_load_time = None
+    if distributor.is_main_process():
+        config_load_time = time.perf_counter() - config_load_time_start
+        _logger.info(f'Config loading time: {config_load_time:.2f} seconds.')
+
     # Load model
+    model_load_path = resources_root / f'{model_name}.onnx'
+    norm_config_load_path = resources_root / f'{model_name}.json'
+    _check_path_exists(model_load_path, norm_config_load_path)
     model_data_load_time_start = None
     if distributor.is_main_process():
         model_data_load_time_start = time.perf_counter()
+    _logger.info(f'Loading model ...')
     model_data = Inferencer.get_model(
         model_path=model_load_path,
         norm_config_path=norm_config_load_path,
@@ -228,9 +244,9 @@ def main():
     else:
         model_data_load_time = None
 
+    # Load image
     image, spacing, position, patient_info = None, None, None, None
-
-    _logger.info(f'Load image from {image_path} .')
+    _logger.info(f'Loading image from {image_path} .')
     image_load_time_start = time.perf_counter()
     if distributor.is_main_process():
         image, spacing, position, patient_info = read_image(
@@ -295,25 +311,53 @@ def main():
 
     mean_hu_calc_time_start = None
     if distributor.is_main_process():
+        _logger.info(f'Calculating class mean HU...')
         mean_hu_calc_time_start = time.perf_counter()
     if image_process_device == 'cpu':
-        hus, voxel_counts = _compute_class_mean_hu_cpu(
-            image, pred_label, n_classes=n_classes)
+        class_mean_hus, class_volumes, class_counts = _compute_class_mean_hu_cpu(
+            image, pred_label, spacing, n_classes=n_classes)
     elif image_process_device == 'cuda':
         image = xp.to_cuda(image)
         pred_label = xp.to_cuda(pred_label)
-        hus, voxel_counts = _compute_class_mean_hu_cuda(
-            distributor, image, pred_label, n_classes=n_classes)
-        hus = xp.to_numpy(hus)
-        voxel_counts = xp.to_numpy(voxel_counts)
+        class_mean_hus, class_volumes, class_counts = _compute_class_mean_hu_cuda(
+            distributor, image, pred_label, spacing, n_classes=n_classes)
+        class_mean_hus = xp.to_numpy(class_mean_hus)
+        class_counts = xp.to_numpy(class_counts)
+        class_volumes = xp.to_numpy(class_volumes)
     else:
         raise ValueError(f'Invalid image_process_device: {image_process_device}')
+
+    # Done using of image
+    del image
+
     mean_hu_calc_time = None
     if distributor.is_main_process():
         mean_hu_calc_time = time.perf_counter() - mean_hu_calc_time_start
         _logger.info(f'Class mean HU calculation time: {mean_hu_calc_time:.2f} seconds.')
 
+    hu_table_save_time = None
+    if distributor.is_main_process():
+        hu_df = report_generator.generate_hu_table(
+            class_mean_hus=class_mean_hus, class_volumes=class_volumes
+        )
+        hu_table_save_time_start = time.perf_counter()
+        hu_df.write_csv(output_dir / 'hu_table.csv')
+        hu_table_save_time = time.perf_counter() - hu_table_save_time_start
+        _logger.info(f'HU table saving time: {hu_table_save_time:.2f} seconds.')
+        del hu_df
 
+    labelmap = xp.to_numpy(pred_label)
+    labelmap_save_time = None
+    if distributor.is_main_process():
+        labelmap_save_time_start = time.perf_counter()
+        metaimage_utils.write(
+            output_dir / 'labelmap.mhd',
+            labelmap.astype(np.int16),
+            spacing=spacing,
+            position=position,
+        )
+        labelmap_save_time = time.perf_counter() - labelmap_save_time_start
+        _logger.info(f'Labelmap saving time: {labelmap_save_time:.2f} seconds.')
 
 def read_image(
         image_path: Path,
@@ -359,9 +403,10 @@ def read_image(
 def _compute_class_mean_hu_cpu(
         image: npt.NDArray,
         labelmap: npt.NDArray[np.integer],
+        spacing: npt.NDArray[np.float64],
         n_classes: int = 81,
         process_dtype: str = 'float32',
-):
+) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.int64]]:
     hu_results, voxel_results = [], []
     for class_id in range(n_classes):
         mask = (labelmap == class_id)
@@ -373,12 +418,15 @@ def _compute_class_mean_hu_cpu(
         voxel_results.append(mask.sum())
     hu_results = np.array(hu_results, dtype=np.float64)
     voxel_results = np.array(voxel_results, dtype=np.int64)
-    return hu_results, voxel_results
+    volume_results = voxel_results.astype(
+        np.float64, copy=False) * spacing.prod() * 1e-3  # mm3 -> cm3
+    return hu_results, volume_results, voxel_results,
 
 def _compute_class_mean_hu_cuda(
         distributor: DistributorProtocol,
         image: xp.TypeArrayLike,
         labelmap: xp.TypeArrayLike[np.integer],
+        spacing: xp.TypeArrayLike[np.float64],
         n_classes: int = 81,
         process_dtype: str = 'float32',
 ):
@@ -405,8 +453,8 @@ def _compute_class_mean_hu_cuda(
         hu_results = sum(_gather_in_rank_order(distributor, hu_results), [])
     hu_results = xp.to_dst(hu_results, dst=image, dtype=np.float64)
     voxel_results = xp.to_dst(voxel_results, dst=image, dtype=np.int64)
-    return hu_results, voxel_results
-
+    volume_results = xp.to(voxel_results, dtype='float64') * spacing.prod().item() * 1e-3  # mm3 -> cm3
+    return hu_results, volume_results, voxel_results,
 
 def _gather_in_rank_order(distributor, x):
     # Pack
@@ -417,6 +465,16 @@ def _gather_in_rank_order(distributor, x):
     xs = [x[1] for x in xs]
     return xs
 
+
+def _check_path_exists(*path: Path):
+    if len(path) == 0:
+        return
+    if len(path) == 1:
+        if not path[0].exists():
+            raise FileNotFoundError(f'Path {path[0]} not found.')
+        return
+    for p in path:
+        _check_path_exists(p)
 
 if __name__ == '__main__':
     main()

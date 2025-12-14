@@ -34,37 +34,6 @@ def main():
         ct_path, name_regex=".*", n_workers=8, progress_bar=True)
     assert np.allclose(spacing, s)
 
-    ct_image = ct_image.astype(np.float32)
-    labelmap = labelmap.astype(np.uint8)
-    total_exec_time = 0
-    for i in range(3):
-        time_start = time.perf_counter()
-        _calculate_mean_hu(ct_image, labelmap)
-        exec_time = time.perf_counter() - time_start
-        if i == 0:
-            continue
-        print(f'Exec time: {exec_time:.2f} seconds.')
-        total_exec_time += exec_time
-    avg_exec_time = total_exec_time / 2
-    print(f'Average time {avg_exec_time:.2f} seconds per loop.')
-
-    total_exec_time = 0
-    for i in range(3):
-        ct_image_ = xp.to_cupy(ct_image)
-        labelmap_ = xp.to_cupy(labelmap)
-        time_start = time.perf_counter()
-        _calculate_mean_hu(ct_image_, labelmap_)
-        exec_time = time.perf_counter() - time_start
-        del ct_image_, labelmap_
-        if i == 0:
-            continue
-        print(f'Exec time: {exec_time:.2f} seconds.')
-        total_exec_time += exec_time
-    avg_exec_time = total_exec_time / 2
-    print(f'Average time {avg_exec_time:.2f} seconds per loop.')
-
-    return
-
     template_path = resource_root / 'MICBON_AI_report_template_p3.pptx'
     hu_statistics_table_path = resource_root / 'hu_statistics.xlsx'
     rendering_config = resource_root / 'rendering_config.json'
@@ -78,7 +47,7 @@ def main():
         class_info_table=class_table_path,
         class_groups=class_groups_path,
     )
-    report_ppt = report_generator.generate(
+    report_ppt = report_generator.generate_report(
         patient_info={
             'name': 'Taro',
             # 'sex': sex,
