@@ -340,7 +340,7 @@ class Main:
         del model_data
 
         if distributor.is_distributed():
-            image = xp.concatenate(self._gather_in_rank_order(image))
+            image = xp.concatenate(distributor.all_gather_object(image))
 
         mean_hu_calc_time_start = None
         if distributor.is_main_process():
