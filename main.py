@@ -10,9 +10,8 @@ import logging
 import argparse
 from pathlib import Path
 import time
-import copy
 import traceback
-from typing import Tuple, List, Dict, Union, Literal, OrderedDict
+from typing import Tuple, Literal, OrderedDict
 
 import numpy as np
 import numpy.typing as npt
@@ -20,7 +19,7 @@ import onnxruntime as ort
 
 from xmodules.logging import Logger
 from xmodules.xutils import os_utils, lib_utils, metaimage_utils, dicom_utils, array_utils as xp
-from xmodules.xdistributor import get_distributor, DistributorProtocol
+from xmodules.xdistributor import get_distributor
 from xmodules.xqct2bmd.inferencer import Inferencer
 
 from modules.report_generator import ReportGenerator, PatientInfoData
