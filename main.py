@@ -121,7 +121,6 @@ class Main:
         )
         _logger.info(f'Launching distributor {distributor.backend}')
         distributor.launch()
-        _logger.info(f'Distributor launched.')
 
         output_dir = opt.output_dir
         if output_dir is None:
@@ -143,8 +142,9 @@ class Main:
             ],
             force=True,
         )
-
         if distributor.is_main_process():
+            _logger.info(f'Distributor launched.')
+
             config_log_str = (
                     "\n---- Configuration ----\n" +
                     json.dumps(vars(opt), indent=2) +
@@ -152,7 +152,9 @@ class Main:
             )
             _logger.info(config_log_str)
 
-        if distributor.is_main_process():
+            if distributor.is_distributed():
+                _logger.info(f'Using distributed mode with {distributor.world_size} processes.')
+
             _logger.info(f'Using distributor accelerator {opt.dist_accelerator}')
             _logger.info(f'Using distributor devices: {opt.dist_devices}')
 

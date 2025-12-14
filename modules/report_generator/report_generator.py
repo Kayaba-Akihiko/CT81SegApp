@@ -13,6 +13,7 @@ import json
 import copy
 from dataclasses import dataclass, fields
 import tomllib
+import logging
 
 import numpy as np
 import numpy.typing as npt
@@ -27,6 +28,8 @@ from .modules.labelmap_renderer import LabelmapRenderer
 from .modules.utils import figure_utils
 
 TypeSex: TypeAlias = Literal['male', 'female']
+
+_logger = logging.getLogger(__name__)
 
 @dataclass
 class ClassGroupData:
@@ -386,7 +389,7 @@ class ReportGenerator:
         box_jobs = list(enumerate(self._class_groups.keys(), start=1))
         if self._distributor.is_distributed():
             if len(box_jobs) < self._distributor.world_size:
-                raise ValueError(f'')
+                raise ValueError(f'Invalid box jobs: {box_jobs}')
             n_jobs_per_rank = (len(box_jobs) + self._distributor.world_size - 1) // self._distributor.world_size
             start = self._distributor.global_rank * n_jobs_per_rank
             end = start + n_jobs_per_rank
