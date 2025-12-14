@@ -434,15 +434,15 @@ class Main:
 
         if distributor.is_main_process():
             time_summary = OrderedDict()
-            time_summary['Config loading'] = config_load_time
-            time_summary['Model loading'] = model_data_load_time
-            time_summary['Image loading'] = image_load_time
-            time_summary['Model inference'] = model_inference_time
-            time_summary['Class mean HU calculation'] = mean_hu_calc_time
-            time_summary['HU table saving'] = hu_table_save_time
-            time_summary['Labelmap saving'] = labelmap_save_time
-            time_summary['Report rendering'] = report_rendering_time
-            time_summary['Report saving'] = report_saving_time
+            time_summary['Loading config'] = config_load_time
+            time_summary['Loading model'] = model_data_load_time
+            time_summary['Loading image'] = image_load_time
+            time_summary['Model Inference'] = model_inference_time
+            time_summary['HU calculation'] = mean_hu_calc_time
+            time_summary['Rendering report'] = report_rendering_time
+            time_summary['Saving HU table'] = hu_table_save_time
+            time_summary['Saving labelmap'] = labelmap_save_time
+            time_summary['Saving report'] = report_saving_time
             time_summary['Total'] = total_time
             _logger.info(
                 f'\n ---- Time summary ----\n'
