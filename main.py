@@ -225,7 +225,7 @@ def main():
 
     # Load model
     model_load_path = resources_root / f'{model_name}.onnx'
-    norm_config_load_path = resources_root / f'{model_name}.json'
+    norm_config_load_path = resources_root / f'{model_name}_norm.json'
     _check_path_exists(model_load_path, norm_config_load_path)
     model_data_load_time_start = None
     if distributor.is_main_process():
@@ -337,6 +337,7 @@ def main():
 
     hu_table_save_time = None
     if distributor.is_main_process():
+
         hu_df = report_generator.generate_hu_table(
             class_mean_hus=class_mean_hus, class_volumes=class_volumes
         )
