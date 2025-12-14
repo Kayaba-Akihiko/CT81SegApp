@@ -337,7 +337,6 @@ class Main:
             model_inference_time = time.perf_counter() - start_time
             _logger.info(
                 f'Model inference time: {model_inference_time:.2f} seconds.')
-        del model_data.session
         del model_data
         gc.collect()
 
@@ -352,8 +351,8 @@ class Main:
             class_mean_hus, class_volumes, class_counts = self._compute_class_mean_hu_cpu(
                 image, pred_label, spacing, n_classes=n_classes)
         elif image_process_device == 'cuda':
-            image = xp.to_cuda(image)
-            pred_label = xp.to_cuda(pred_label)
+            image = xp.to_torch(image)
+            pred_label = xp.to_torch(pred_label)
             class_mean_hus, class_volumes, class_counts = self._compute_class_mean_hu_cuda(
                 image, pred_label, spacing, n_classes=n_classes)
             class_mean_hus = xp.to_numpy(class_mean_hus)
@@ -535,7 +534,6 @@ class Main:
             start = distributor.global_rank * n_classes_per_rank
             end = start + n_classes_per_rank
             classes = classes[start: end]
-            assert image.device.id == distributor.local_rank
 
         hu_results, voxel_results = [], []
         for class_id in classes:
@@ -553,16 +551,6 @@ class Main:
         voxel_results = xp.to_dst(voxel_results, dst=image, dtype=np.int64)
         volume_results = xp.to(voxel_results, dtype='float64') * spacing.prod().item() * 1e-3  # mm3 -> cm3
         return hu_results, volume_results, voxel_results,
-
-    def _gather_in_rank_order(self, x):
-        distributor = self._distributor
-        # Pack
-        x = (distributor.global_rank, x)
-        xs = distributor.all_gather_object(x)
-        xs = sorted(xs, key=lambda _x: _x[0])
-        # Unpack
-        xs = [x[1] for x in xs]
-        return xs
 
     @classmethod
     def _check_path_exists(cls, *path: Path):
