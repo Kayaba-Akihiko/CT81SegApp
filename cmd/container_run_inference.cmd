@@ -8,6 +8,7 @@ set "OUTPUT_DIR=G:\projects\ct81segapp_export\output"
 set N_WORKERS=8
 set BATCH_SIZE=2
 set DEVICE=cuda
+set N_DEVICES=1
 set DICOM_NAME_REGEX=\".*\"
 
 set DISTRO_NAME=ct81seg-ubuntu
@@ -31,7 +32,7 @@ set OUTPUT_DIR=%WSL_PATH%
 call :log "[Script start] %DATE% %TIME%"
 :: Record start time
 set "START_TIME=%TIME%"
-wsl -d %DISTRO_NAME% -u %WSL_USER% -- bash -lc "singularity exec --nv --nvccli --bind /mnt %SRC_DIR%/resources/py3.12-torch2.8-cu12.8_latest.sif python %SRC_DIR%/main.py --image_path %CT_IMAGE_PATH% --output_dir %OUTPUT_DIR% --dicom_name_regex %DICOM_NAME_REGEX% --n_workers %N_WORKERS% --batch_size %BATCH_SIZE% --device %DEVICE%"
+wsl -d %DISTRO_NAME% -u %WSL_USER% -- bash -lc "singularity exec --nv --nvccli --bind /mnt %SRC_DIR%/resources/py3.12-torch2.8-cu12.8_latest.sif python %SRC_DIR%/main.py --image_path %CT_IMAGE_PATH% --output_dir %OUTPUT_DIR% --dicom_name_regex %DICOM_NAME_REGEX% --n_workers %N_WORKERS% --batch_size %BATCH_SIZE% --device %DEVICE% --dist_devices %N_DEVICES%"
 :: Record end time
 set "END_TIME=%TIME%"
 call :log "[Script end] %DATE% %TIME%"
