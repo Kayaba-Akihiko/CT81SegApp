@@ -14,6 +14,7 @@ from pathlib import Path
 import time
 import traceback
 from typing import Tuple, Literal, OrderedDict
+import gc
 
 import numpy as np
 import numpy.typing as npt
@@ -336,8 +337,9 @@ class Main:
             model_inference_time = time.perf_counter() - start_time
             _logger.info(
                 f'Model inference time: {model_inference_time:.2f} seconds.')
-
+        del model_data.session
         del model_data
+        gc.collect()
 
         if distributor.is_distributed():
             image = xp.concatenate(distributor.all_gather_object(image))
