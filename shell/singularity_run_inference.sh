@@ -15,8 +15,8 @@ batch_size=2
 num_core=8
 num_gpus=2
 
-# simg_path="${script_dir}"/src/resources/py3.12-torch2.8-cu12.8_latest.sif
-simg_path=/win/flounder/user/koku/sif/py3.12-torch2.8-cu12.8_latest.sif
+simg_path="${script_dir}"/src/resources/py3.12-torch2.8-cu12.8_latest.sif
+#simg_path=/win/flounder/user/koku/sif/py3.12-torch2.8-cu12.8_latest.sif
 
 mkdir -p "${output_dir}"
 echo "[Script start] $(date)" 2>&1 | tee -a "${output_dir}"/inference.log
