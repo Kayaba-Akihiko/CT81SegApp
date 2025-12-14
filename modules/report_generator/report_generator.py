@@ -248,11 +248,14 @@ class ReportGenerator:
             else:
                 raise TypeError(f'Invalid observation_message type: {type(observation_messages)=}')
 
+            cleaned_observation_messages = {}
             for k, v in observation_messages.items():
+                k = int(k)
                 if k not in range(1, 4):
                     raise ValueError(f'Invalid observation message key: {k}')
                 if not isinstance(v, str):
                     raise TypeError(f'Invalid observation message value: {v}')
+                cleaned_observation_messages[k] = v
         if self._distributor.is_distributed():
             observation_messages = self._distributor.broadcast_object(observation_messages)
         assert isinstance(observation_messages, dict)
