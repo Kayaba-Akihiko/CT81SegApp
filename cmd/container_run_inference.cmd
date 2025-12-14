@@ -3,30 +3,30 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
-set CT_IMAGE_PATH=G:\projects\ct81segapp_export\input\UZU00001_CT1_low
-set OUTPUT_DIR=G:\projects\ct_81_seg_v2_export\output
-set N_WORKERS=8
-set BATCH_SIZE=2
-set DEVICE=cuda
+set "CT_IMAGE_PATH=G:\projects\ct81segapp_export\input\UZU00001_CT1_low"
+set "OUTPUT_DIR=G:\projects\ct_81_seg_v2_export\output"
+set "N_WORKERS=8"
+set "BATCH_SIZE=2"
+set "DEVICE=cuda"
 set DICOM_NAME_REGEX=\".*\"
 
-set DISTRO_NAME=ct81seg-ubuntu
-set WSL_USER=ct81seg
+set "DISTRO_NAME=ct81seg-ubuntu"
+set "WSL_USER=ct81seg"
 
-set SCRIPT_DIR=%~dp0
-set SCRIPT_DIR=%SCRIPT_DIR:~0,-1%
-set SRC_DIR=%SCRIPT_DIR%\src
-set LOG_PATH=%OUTPUT_DIR%\inference.log
+set "SCRIPT_DIR=%~dp0"
+set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
+set "SRC_DIR=%SCRIPT_DIR%\src"
+set "LOG_PATH=%OUTPUT_DIR%\inference.log"
 
 mkdir "%OUTPUT_DIR%"
 
 rem Convert PROJECT_DIR to WSL path
-call :to_wsl_path %SRC_DIR%
-set SRC_DIR=%WSL_PATH%
-call :to_wsl_path %CT_IMAGE_PATH%
-set CT_IMAGE_PATH=%WSL_PATH%
-call :to_wsl_path %OUTPUT_DIR%
-set OUTPUT_DIR=%WSL_PATH%
+call :to_wsl_path "%SRC_DIR%"
+set "SRC_DIR=%WSL_PATH%"
+call :to_wsl_path "%CT_IMAGE_PATH%"
+set "CT_IMAGE_PATH=%WSL_PATH%"
+call :to_wsl_path "%OUTPUT_DIR%"
+set "OUTPUT_DIR=%WSL_PATH%"
 
 echo CT_IMAGE_PATH=%CT_IMAGE_PATH%
 echo OUTPUT_DIR=%OUTPUT_DIR%
@@ -37,7 +37,7 @@ for /f "tokens=1-4 delims=:.," %%a in ("%TIME%") do (
     set /a "START_MS=(((1%%a-100)*3600 + (1%%b-100)*60 + (1%%c-100))*1000 + (1%%d-100))"
 )
 
-wsl -d %DISTRO_NAME% -u %WSL_USER% -- bash -lc "singularity exec --nv --nvccli --bind /mnt %SRC_DIR%/py3.12-torch2.8-cu12.8_latest.sif python %SRC_DIR%/main.py --image_path %CT_IMAGE_PATH% --output_dir %OUTPUT_DIR% --dicom_name_regex %DICOM_NAME_REGEX% --n_workers %N_WORKERS% --batch_size %BATCH_SIZE% --device %DEVICE%"
+wsl -d %DISTRO_NAME% -u %WSL_USER% -- bash -lc "singularity exec --nv --nvccli --bind /mnt %SRC_DIR%/resources/py3.12-torch2.8-cu12.8_latest.sif python %SRC_DIR%/main.py --image_path %CT_IMAGE_PATH% --output_dir %OUTPUT_DIR% --dicom_name_regex %DICOM_NAME_REGEX% --n_workers %N_WORKERS% --batch_size %BATCH_SIZE% --device %DEVICE%"
 
 REM --- end time ---
 for /f "tokens=1-4 delims=:.," %%a in ("%TIME%") do (
