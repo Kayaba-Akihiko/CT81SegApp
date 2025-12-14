@@ -1,7 +1,18 @@
+# Window and Renderer settings
+alpha_bit_planes = 1
+multi_samples = 0
+use_depth_peeling = true
+maximum_number_of_peels = 200
+use_depth_peeling_for_volumes = true
+occlusion_ratio = 0.1
+
+# Volume settings
 specular = 0.05
 specular_power = 1
 ambient = 0.3
 diffuse = 0.6
 shade = true
 blend_mode = "composite"
+
+# Other settings
 skin_class_id = 42
