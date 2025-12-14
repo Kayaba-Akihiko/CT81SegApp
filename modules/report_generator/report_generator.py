@@ -256,6 +256,8 @@ class ReportGenerator:
                 if not isinstance(v, str):
                     raise TypeError(f'Invalid observation message value: {v}')
                 cleaned_observation_messages[k] = v
+            observation_messages = cleaned_observation_messages
+            del cleaned_observation_messages
         if self._distributor.is_distributed():
             observation_messages = self._distributor.broadcast_object(observation_messages)
         assert isinstance(observation_messages, dict)
