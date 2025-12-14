@@ -4,7 +4,7 @@
 setlocal EnableExtensions EnableDelayedExpansion
 
 set "CT_IMAGE_PATH=G:\projects\ct81segapp_export\input\UZU00001_CT1_low"
-set "OUTPUT_DIR=G:\projects\ct_81_seg_v2_export\output"
+set "OUTPUT_DIR=G:\projects\ct81segapp_export\output"
 set "N_WORKERS=8"
 set "BATCH_SIZE=2"
 set "DEVICE=cuda"
