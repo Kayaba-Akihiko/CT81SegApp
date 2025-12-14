@@ -516,6 +516,8 @@ class ArrayUtils:
     ) -> 'cpt.NDArray[NPGeneric]':
         if dtype is not None:
             dtype = cls.convert_dtype_to_numpy(dtype)
+        if not cls.is_array(array):
+            raise TypeError(f"Unsupported array type: {type(array)}.")
 
         device_context = nullcontext()
         if device is not None:
@@ -538,11 +540,7 @@ class ArrayUtils:
                 array = cp.asarray(array, dtype)
         else:
             with device_context:
-                try:
-                    array = cp.asarray(array, dtype)
-                except ValueError as e:
-                    print(dtype, type(array))
-                    raise e
+                array = cp.asarray(array, dtype=dtype)
         return array
 
     @classmethod
