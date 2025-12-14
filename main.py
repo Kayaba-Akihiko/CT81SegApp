@@ -328,7 +328,7 @@ class Main:
             out_device=image_process_device,
             progress_bar=distributor.is_main_process(),
             progress_desc='Inferencing',
-        )
+        ).astype(np.uint8, copy=False)
         if distributor.is_distributed():
             pred_label = xp.concatenate(distributor.all_gather_object(pred_label))
         model_inference_time = None
