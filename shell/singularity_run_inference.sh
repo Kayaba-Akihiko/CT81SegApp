@@ -9,7 +9,7 @@
 #
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
-ct_input=${script_dir}/input/UZU00001_CT1
+ct_input=${script_dir}/input/UZU00001_CT1_low
 output_dir=${script_dir}/output
 batch_size=4
 num_core=8
