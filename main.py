@@ -315,15 +315,15 @@ class Main:
                 progress_desc='Reading image',
                 dicom_name_regex=opt.dicom_name_regex,
             )
-        if distributor.is_distributed():
-            image, spacing, position, patient_info = distributor.broadcast_object(
-                image, spacing, position, patient_info
-            )
         image_load_time = None
         if distributor.is_main_process():
             image_load_time = time.perf_counter() - image_load_time_start
             _logger.info(f'Image loading time: {image_load_time:.2f} seconds.')
             self._time_summary['Loading image'] = image_load_time
+
+            image, spacing, position, patient_info = distributor.broadcast_object(
+                image, spacing, position, patient_info
+            )
 
         if distributor.is_distributed():
             # Shard image

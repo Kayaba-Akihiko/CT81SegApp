@@ -14,7 +14,7 @@ def main():
     output_dir.mkdir(exist_ok=True, parents=True)
 
 
-    x = np.arange([True, True, False])
+    x = np.array([True, True, False])
     y = x.sum()
     print(y, y.dtype)
 
