@@ -63,6 +63,7 @@ class Inferencer:
         so.intra_op_num_threads = os_utils.get_max_n_worker()
         so.enable_mem_pattern = False
         so.enable_cpu_mem_arena = False
+        so.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
         _logger.info(f'Load ONNX model from {model_path} .')
         session = ort.InferenceSession(
             # onnx_model.SerializeToString(),
