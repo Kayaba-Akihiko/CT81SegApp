@@ -217,7 +217,9 @@ class Inferencer:
             io_binding = sess.io_binding()
             bind_in(io_binding, batch_slice)
             bind_out(io_binding, pred_logits)
+            io_binding.synchronize_inputs()
             sess.run_with_iobinding(io_binding)
+            io_binding.synchronize_outputs()  # <<< critical for CUDA
             pred_logits = pred_logits.copy()
 
             # (B, C, H, W)
