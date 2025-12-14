@@ -1,11 +1,11 @@
 
 
 @echo off
-setlocal
+setlocal EnableExtensions EnableDelayedExpansion
 
-set CT_IMAGE_PATH=G:\projects\ct81segapp_export\input\UZU00001_CT1
+set CT_IMAGE_PATH=G:\projects\ct81segapp_export\input\UZU00001_CT1_low
 set OUTPUT_DIR=G:\projects\ct_81_seg_v2_export\output
-set N_WORKERS=4
+set N_WORKERS=8
 set BATCH_SIZE=2
 set DEVICE=cuda
 set DICOM_NAME_REGEX=\".*\"
@@ -16,6 +16,9 @@ set WSL_USER=ct81seg
 set SCRIPT_DIR=%~dp0
 set SCRIPT_DIR=%SCRIPT_DIR:~0,-1%
 set SRC_DIR=%SCRIPT_DIR%\src
+set LOG_DIR=%OUTPUT_DIR%\inference.log
+
+mkdir "%OUTPUT_DIR%"
 
 rem Convert PROJECT_DIR to WSL path
 call :to_wsl_path %SRC_DIR%
@@ -28,9 +31,29 @@ set OUTPUT_DIR=%WSL_PATH%
 echo CT_IMAGE_PATH=%CT_IMAGE_PATH%
 echo OUTPUT_DIR=%OUTPUT_DIR%
 
-echo Start running container
-wsl -d %DISTRO_NAME% -u %WSL_USER% -- bash -lc "singularity exec --nv --nvccli --bind /mnt %SRC_DIR%/py3.12-torch2.8-cu12.8_latest.sif python %SRC_DIR%/basic_2d.py -i %CT_IMAGE_PATH% -o %OUTPUT_DIR% --dicom_name_regex %DICOM_NAME_REGEX% -n %N_WORKERS% -b %BATCH_SIZE% -d %DEVICE%"
-echo Container run finished.
+echo [Script start] >> %LOG_PATH%
+REM --- start time ---
+for /f "tokens=1-4 delims=:.," %%a in ("%TIME%") do (
+    set /a "START_MS=(((1%%a-100)*3600 + (1%%b-100)*60 + (1%%c-100))*1000 + (1%%d-100))"
+)
+
+wsl -d %DISTRO_NAME% -u %WSL_USER% -- bash -lc "singularity exec --nv --nvccli --bind /mnt %SRC_DIR%/py3.12-torch2.8-cu12.8_latest.sif python %SRC_DIR%/main.py --image_path %CT_IMAGE_PATH% --output_dir %OUTPUT_DIR% --dicom_name_regex %DICOM_NAME_REGEX% --n_workers %N_WORKERS% --batch_size %BATCH_SIZE% --device %DEVICE%"
+
+REM --- end time ---
+for /f "tokens=1-4 delims=:.," %%a in ("%TIME%") do (
+    set /a "END_MS=(((1%%a-100)*3600 + (1%%b-100)*60 + (1%%c-100))*1000 + (1%%d-100))"
+)
+echo [Script end] >> %LOG_PATH%
+
+REM --- handle midnight wrap ---
+if !END_MS! LSS !START_MS! (
+    set /a END_MS+=24*3600*1000
+)
+
+set /a ELAPSED_MS=END_MS-START_MS
+set /a ELAPSED_SEC=ELAPSED_MS/1000
+
+echo Script elapsed: !ELAPSED_SEC! seconds >> %LOG_PATH%
 
 endlocal
 pause
