@@ -12,6 +12,7 @@ from collections import OrderedDict
 import json
 import copy
 from dataclasses import dataclass, fields
+import tomllib
 
 import numpy as np
 import numpy.typing as npt
@@ -142,7 +143,7 @@ class ReportGenerator:
         if self._distributor.is_main_process():
             if os_utils.is_path_like(rendering_config):
                 with os_utils.format_path_string(rendering_config).open('rb') as f:
-                    rendering_config = json.load(f)
+                    rendering_config = tomllib.load(f)
             elif isinstance(rendering_config, dict):
                 rendering_config = copy.deepcopy(rendering_config)
             else:
@@ -201,7 +202,8 @@ class ReportGenerator:
         class_groups_ = None
         if self._distributor.is_main_process():
             class_groups_ = OrderedDict()
-            if isinstance(class_groups, Path):
+            if os_utils.is_path_like(class_groups):
+                class_groups = os_utils.format_path_string(class_groups)
                 with class_groups.open('rb') as f:
                     json_data = json.load(f)
                 for line_dict in json_data:
@@ -242,7 +244,7 @@ class ReportGenerator:
         if self._distributor.is_main_process():
             if os_utils.is_path_like(observation_messages):
                 with os_utils.format_path_string(observation_messages).open('rb') as f:
-                    observation_messages = json.load(f)
+                    observation_messages = tomllib.load(f)
             elif isinstance(observation_messages, dict):
                 observation_messages = copy.deepcopy(observation_messages)
             else:

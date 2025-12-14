@@ -215,10 +215,10 @@ class Main:
         # Load configuration
         template_path = resources_root / 'MICBON_AI_report_template_p3.pptx'
         hu_statistics_table_path = resources_root / 'hu_statistics.xlsx'
-        rendering_config = resources_root / 'rendering_config.json'
+        rendering_config = resources_root / 'rendering_config.toml'
         class_table_path = resources_root / 'class_table.csv'
         class_groups_path = resources_root / 'class_groups.json'
-        observation_messages_path = resources_root / 'observation_messages_jp.json'
+        observation_messages_path = resources_root / 'observation_messages_jp.toml'
         self._check_path_exists(
             template_path, hu_statistics_table_path, rendering_config,
             class_table_path, class_groups_path, observation_messages_path,

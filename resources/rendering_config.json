@@ -1,9 +1,0 @@
-{
-    "specular": 0.05,
-    "specular_power": 1,
-    "ambient": 0.3,
-    "diffuse": 0.6,
-    "shade": true,
-    "blend_mode": "composite",
-    "skin_class_id": 42
-}
