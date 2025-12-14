@@ -116,7 +116,7 @@ class Inferencer:
                     buffer_ptr=_x.ctypes.data,
                 )
             to_array = xp.to_numpy
-            empty_fn = np.empty
+            zeros_fn = np.zeros
             argmax_fn = np.argmax
         elif prepro_device == 'cuda':
             def bind_in(
@@ -144,7 +144,7 @@ class Inferencer:
                     buffer_ptr=_x.data.ptr,
                 )
             to_array = xp.to_cupy
-            empty_fn = cp.empty
+            zeros_fn = cp.zeros
             argmax_fn = cp.argmax
         else:
             raise ValueError(f'Unknown device {prepro_device}')
@@ -208,7 +208,7 @@ class Inferencer:
             ).astype(np.float32, copy=False)
 
             batch_slice = batch_slice[:, None].copy()
-            pred_logits = empty_fn(
+            pred_logits = zeros_fn(
                 (len(batch_slice), *model_data.out_shape), dtype=np.float32,
             )
             io_binding = sess.io_binding()
