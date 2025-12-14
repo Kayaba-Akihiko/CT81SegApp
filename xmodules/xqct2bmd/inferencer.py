@@ -123,7 +123,6 @@ class Inferencer:
                     _iob: ort.IOBinding,
                     _x: xp.TypeArrayLike[NPIntOrFloat],
             ):
-                _logger.info(f'{type(_x)=}')
                 _iob.bind_input(
                     name=input_name,
                     device_type='cuda',
