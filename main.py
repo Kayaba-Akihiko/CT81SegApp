@@ -162,6 +162,7 @@ class Main:
         self._opt = opt
         self._distributor = distributor
         self._output_dir = output_dir
+        self._time_summary = {}
 
     def run(self):
         if self._distributor.is_main_process():
@@ -171,8 +172,30 @@ class Main:
         except Exception as e:
             error_message = f'{e}\n{traceback.format_exc()}'
             _logger.error(error_message)
-            raise e
         if self._distributor.is_main_process():
+            time_summary = OrderedDict()
+            keys = [
+                'Loading config',
+                'Loading model',
+                'Loading image',
+                'HU calculation',
+                'Model Inference',
+                'Rendering report',
+                'Saving HU table',
+                'Saving labelmap',
+                'Saving report'
+            ]
+            for k in keys:
+                if k in self._time_summary:
+                    time_summary[k] = self._time_summary[k]
+                else:
+                    time_summary[k] = None
+            _logger.info(
+                f'\n ---- Time summary ----\n'
+                f'{json.dumps(time_summary, indent=2)}'
+                f'\n ---- End of time summary ----'
+            )
+
             _logger.info('Done.')
 
     def _run_body(self):
@@ -253,6 +276,7 @@ class Main:
         if distributor.is_main_process():
             config_load_time = time.perf_counter() - config_load_time_start
             _logger.info(f'Config loading time: {config_load_time:.2f} seconds.')
+            self._time_summary['Loading config'] = config_load_time
 
         # Load model
         if distributor.is_main_process():
@@ -275,6 +299,7 @@ class Main:
         if distributor.is_main_process():
             model_data_load_time = time.perf_counter() - model_data_load_time_start
             _logger.info(f'Model loading time: {model_data_load_time:.2f} seconds.')
+            self._time_summary['Loading model'] = model_data_load_time
         else:
             model_data_load_time = None
 
@@ -298,6 +323,7 @@ class Main:
         if distributor.is_main_process():
             image_load_time = time.perf_counter() - image_load_time_start
             _logger.info(f'Image loading time: {image_load_time:.2f} seconds.')
+            self._time_summary['Loading image'] = image_load_time
 
         if distributor.is_distributed():
             # Shard image
@@ -337,6 +363,7 @@ class Main:
             model_inference_time = time.perf_counter() - start_time
             _logger.info(
                 f'Model inference time: {model_inference_time:.2f} seconds.')
+            self._time_summary['Model Inference'] = model_inference_time
         del model_data
         gc.collect()
 
@@ -368,6 +395,7 @@ class Main:
         if distributor.is_main_process():
             mean_hu_calc_time = time.perf_counter() - mean_hu_calc_time_start
             _logger.info(f'Class mean HU calculation time: {mean_hu_calc_time:.2f} seconds.')
+            self._time_summary['HU calculation'] = mean_hu_calc_time
 
         hu_table_save_time = None
         if distributor.is_main_process():
@@ -378,6 +406,7 @@ class Main:
             hu_df.write_csv(output_dir / 'hu_table.csv')
             hu_table_save_time = time.perf_counter() - hu_table_save_time_start
             _logger.info(f'HU table saving time: {hu_table_save_time:.2f} seconds.')
+            self._time_summary['Saving HU table'] = hu_table_save_time
             del hu_df
 
         labelmap: npt.NDArray[np.uint8] = xp.to_numpy(pred_label).astype(np.uint8, copy=False)
@@ -392,6 +421,7 @@ class Main:
             )
             labelmap_save_time = time.perf_counter() - labelmap_save_time_start
             _logger.info(f'Labelmap saving time: {labelmap_save_time:.2f} seconds.')
+            self._time_summary['Saving labelmap'] = labelmap_save_time
 
 
         report_rendering_time_start = None
@@ -409,6 +439,7 @@ class Main:
         if distributor.is_main_process():
             report_rendering_time = time.perf_counter() - report_rendering_time_start
             _logger.info(f'Report rendering time: {report_rendering_time:.2f} seconds.')
+            self._time_summary['Rendering report'] = report_rendering_time
 
         report_save_dpi = opt.report_dpi
         if report_save_dpi < 10 or report_save_dpi > 1000:
@@ -427,29 +458,13 @@ class Main:
             )
             report_saving_time = time.perf_counter() - report_saving_time_start
             _logger.info(f'Report saving time: {report_saving_time:.2f} seconds.')
+            self._time_summary['Saving report'] = report_saving_time
 
         total_time = None
         if distributor.is_main_process():
             total_time = time.perf_counter() - total_time_start
             _logger.info(f'Total time: {total_time:.2f} seconds.')
-
-        if distributor.is_main_process():
-            time_summary = OrderedDict()
-            time_summary['Loading config'] = config_load_time
-            time_summary['Loading model'] = model_data_load_time
-            time_summary['Loading image'] = image_load_time
-            time_summary['Model Inference'] = model_inference_time
-            time_summary['HU calculation'] = mean_hu_calc_time
-            time_summary['Rendering report'] = report_rendering_time
-            time_summary['Saving labelmap'] = labelmap_save_time
-            time_summary['Saving HU table'] = hu_table_save_time
-            time_summary['Saving report'] = report_saving_time
-            time_summary['Total'] = total_time
-            _logger.info(
-                f'\n ---- Time summary ----\n'
-                f'{json.dumps(time_summary, indent=2)}'
-                f'\n ---- End of time summary ----'
-            )
+            self._time_summary['Total'] = total_time
 
     @staticmethod
     def _read_image(
