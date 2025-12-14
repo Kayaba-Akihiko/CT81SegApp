@@ -200,6 +200,7 @@ class Main:
         elif device == 'cuda':
             onnx_providers = [
                 ('CUDAExecutionProvider', {"device_id": distributor.local_rank}),
+                'CPUExecutionProvider',
             ]
         else:
             raise ValueError(
@@ -383,6 +384,7 @@ class Main:
 
         report_rendering_time_start = None
         if distributor.is_main_process():
+            _logger.info(f'Generating report ...')
             report_rendering_time_start = time.perf_counter()
         report_ppt = report_generator.generate_report(
             patient_info=patient_info,
