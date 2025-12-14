@@ -218,7 +218,7 @@ class Main:
         rendering_config = resources_root / 'rendering_config.json'
         class_table_path = resources_root / 'class_table.csv'
         class_groups_path = resources_root / 'class_groups.json'
-        observation_messages_path = resources_root / 'observation_messages.json'
+        observation_messages_path = resources_root / 'observation_messages_jp.json'
         self._check_path_exists(
             template_path, hu_statistics_table_path, rendering_config,
             class_table_path, class_groups_path, observation_messages_path,

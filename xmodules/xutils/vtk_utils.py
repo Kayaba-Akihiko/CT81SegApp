@@ -343,10 +343,14 @@ class VTKUtils:
 
         vtk_color = vtk.vtkColorTransferFunction()
         vtk_scalar_opacity = vtk.vtkPiecewiseFunction()
+        half = 0.5
         for class_id, color in color_table.items():
             r, g, b, a = map(_convert_value, color)
             vtk_color.AddRGBPoint(class_id, r, g, b)
+            vtk_scalar_opacity.AddPoint(class_id - half, 0.0)
             vtk_scalar_opacity.AddPoint(class_id, a)
+            vtk_scalar_opacity.AddPoint(class_id + half, 0.0)
+            # vtk_scalar_opacity.AddPoint(class_id, a)
         return vtk_color, vtk_scalar_opacity
 
     @staticmethod
