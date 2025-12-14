@@ -497,7 +497,7 @@ class ReportGenerator:
         )
 
         front_view, back_view = None, None
-        if self._distributor.is_distributed():
+        if self._distributor.is_main_process():
             front_view, back_view = labelmap_renderer.render(
                 view=['front', 'back'],
                 class_color_table=self._class_color_table,
