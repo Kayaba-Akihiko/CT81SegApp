@@ -538,8 +538,11 @@ class ArrayUtils:
                 array = cp.asarray(array, dtype)
         else:
             with device_context:
-                print(f'{dtype=}')
-                array = cp.asarray(array, dtype)
+                try:
+                    array = cp.asarray(array, dtype)
+                except TypeError as e:
+                    print(dtype)
+                    raise e
         return array
 
     @classmethod
