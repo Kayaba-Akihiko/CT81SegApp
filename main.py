@@ -394,7 +394,7 @@ def read_image(
         creation_kwargs = {}
         for tag_name, tag_hex in tag_name_map.items():
             creation_kwargs[tag_name] = tag_res[tag_hex]
-        patient_info = PatientInfoData.from_dict(**creation_kwargs)
+        patient_info = PatientInfoData.from_dict(creation_kwargs)
 
     if position is None:
         position = np.zeros(len(spacing), dtype=np.float64)
