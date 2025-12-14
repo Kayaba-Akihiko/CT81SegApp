@@ -5,7 +5,7 @@ setlocal EnableExtensions EnableDelayedExpansion
 
 set "CT_IMAGE_PATH=G:\projects\ct81segapp_export\input\UZU00001_CT1_low"
 set "OUTPUT_DIR=G:\projects\ct81segapp_export\output"
-set N_WORKERS=4
+set N_WORKERS=8
 set BATCH_SIZE=2
 set DEVICE=cuda
 set DICOM_NAME_REGEX=\".*\"
@@ -25,7 +25,24 @@ set CT_IMAGE_PATH=%WSL_PATH%
 call :to_wsl_path %OUTPUT_DIR%
 set OUTPUT_DIR=%WSL_PATH%
 
+:: Record start time
+set "START_TIME=%TIME%"
 wsl -d %DISTRO_NAME% -u %WSL_USER% -- bash -lc "singularity exec --nv --nvccli --bind /mnt %SRC_DIR%/resources/py3.12-torch2.8-cu12.8_latest.sif python %SRC_DIR%/main.py --image_path %CT_IMAGE_PATH% --output_dir %OUTPUT_DIR% --dicom_name_regex %DICOM_NAME_REGEX% --n_workers %N_WORKERS% --batch_size %BATCH_SIZE% --device %DEVICE%"
+:: Record end time
+set "END_TIME=%TIME%"
+
+call :time_to_cs "%START_TIME%" START_CS
+call :time_to_cs "%END_TIME%"   END_CS
+
+:: Handle midnight wrap
+if %END_CS% LSS %START_CS% (
+    set /a END_CS+=24*60*60*100
+)
+
+set /a ELAPSED_CS=END_CS-START_CS
+set /a ELAPSED_SEC=ELAPSED_CS/100
+
+echo WSL command execution time: %ELAPSED_SEC% seconds
 
 endlocal
 pause
@@ -63,6 +80,22 @@ set "OUT=/mnt/!DRIVE!!PATH_NO_DRIVE!"
 endlocal & set "WSL_PATH=%OUT%"
 exit /b
 
+
+:: -----------------------
+:: Convert HH:MM:SS.cc -> centiseconds
+:: -----------------------
+:time_to_cs
+setlocal EnableDelayedExpansion
+set "t=%~1"
+
+:: Ensure leading zero safety via 1xx-100 trick
+set /a CS=(1%t:~0,2%-100)*360000 ^
+       + (1%t:~3,2%-100)*6000 ^
+       + (1%t:~6,2%-100)*100 ^
+       + (1%t:~9,2%-100)
+
+endlocal & set "%2=%CS%"
+exit /b
 REM ======================================================
 REM  Copyright (c) 2025. by Yi GU <gu.yi.gu4@naist.ac.jp>,
 REM  Biomedical Imaging Intelligence Laboratory,
