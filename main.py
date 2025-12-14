@@ -452,13 +452,11 @@ def _compute_class_mean_hu_cuda(
             hu_results.append(None)
             voxel_results.append(0)
             continue
-        hu_results.append(xp.to(image[mask], dtype=process_dtype).mean())
-        voxel_results.append(mask.sum())
+        hu_results.append(xp.to(image[mask], dtype=process_dtype).mean().item())
+        voxel_results.append(mask.sum().item())
     if distributor.is_distributed():
         hu_results = sum(_gather_in_rank_order(distributor, hu_results), [])
         voxel_results = sum(_gather_in_rank_order(distributor, voxel_results), [])
-    hu_results = xp.concatenate(hu_results)
-    voxel_results = xp.concatenate(voxel_results)
     hu_results = xp.to_dst(hu_results, dst=image, dtype=np.float64)
     voxel_results = xp.to_dst(voxel_results, dst=image, dtype=np.int64)
     volume_results = xp.to(voxel_results, dtype='float64') * spacing.prod().item() * 1e-3  # mm3 -> cm3
