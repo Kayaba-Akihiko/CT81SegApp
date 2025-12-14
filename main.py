@@ -40,7 +40,7 @@ class Main:
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
         parser.add_argument(
-            '--version', action='version', version=f'%(prog)s {__version__}')
+            '--version', action='version', version=f'{__version__}')
 
         parser.add_argument(
             '--image_path', type=str,
@@ -92,6 +92,10 @@ class Main:
             '--dist_devices',
             type=int,
             default=1,
+        )
+        parser.add_argument(
+            '--report_dpi',
+            type=int, default=200,
         )
         parser.add_argument(
             '-l', '--logging_level', type=str, default='INFO',
@@ -403,12 +407,20 @@ class Main:
             report_rendering_time = time.perf_counter() - report_rendering_time_start
             _logger.info(f'Report rendering time: {report_rendering_time:.2f} seconds.')
 
+        report_save_dpi = opt.report_dpi
+        if report_save_dpi < 10 or report_save_dpi > 1000:
+            # ignore
+            if distributor.is_main_process():
+                _logger.warning(f'Invalid report dpi: {report_save_dpi}. Reset to 200')
+            report_save_dpi = 200
+
         report_saving_time = None
         if distributor.is_main_process():
             report_saving_time_start = time.perf_counter()
             report_ppt.save(
                 pdf_save_path=output_dir / 'report.pdf',
                 image_save_path=output_dir / 'report.png',
+                dpi=report_save_dpi,
             )
             report_saving_time = time.perf_counter() - report_saving_time_start
             _logger.info(f'Report saving time: {report_saving_time:.2f} seconds.')
