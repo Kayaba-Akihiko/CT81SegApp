@@ -179,7 +179,6 @@ def main():
     elif device == 'cuda':
         onnx_providers = [
             ('CUDAExecutionProvider', {"device_id": distributor.local_rank}),
-            ('CPUExecutionProvider',)
         ]
     else:
         raise ValueError(
