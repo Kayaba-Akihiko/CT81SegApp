@@ -482,7 +482,7 @@ class ArrayUtils:
             dtype = cls.convert_dtype_to_numpy(dtype)
 
         if dtype is not None and dtype not in {
-            'float64', 'int64'}:
+            'float16', 'float32', 'float64', 'int16', 'int32', 'int64'}:
             raise ValueError(
                 f"Unsupported dtype: {dtype}. "
                 "Expected one of: 'float32', 'float64', 'int32', 'int64'."
@@ -668,7 +668,7 @@ class ArrayUtils:
                     "dtype must be None when backend is a list."
                 )
         elif cls.is_array(backend):
-            backend, inferred_device = cls.get_backend_n_device(array)
+            backend, inferred_device = cls.get_backend_n_device(backend)
             if device is None:
                 device = inferred_device
 
@@ -683,7 +683,7 @@ class ArrayUtils:
         else:
             raise ValueError(
                 f"Unsupported to: {backend}. "
-                "Expected one of: 'numpy', 'cupy', 'torch', 'list', 'tuple'."
+                "Expected one of: 'numpy', 'cupy', 'torch', 'list'."
             )
         return to_array_fn(array=array, dtype=dtype, device=device)
 
