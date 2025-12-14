@@ -16,6 +16,9 @@ set WSL_USER=ct81seg
 set SCRIPT_DIR=%~dp0
 set SCRIPT_DIR=%SCRIPT_DIR:~0,-1%
 set SRC_DIR=%SCRIPT_DIR%\src
+set LOG_FILE=%OUTPUT_DIR%\inference.log
+
+mkdir "%OUTPUT_DIR%"
 
 rem Convert PROJECT_DIR to WSL path
 call :to_wsl_path %SRC_DIR%
@@ -87,15 +90,23 @@ exit /b
 :time_to_cs
 setlocal EnableDelayedExpansion
 set "t=%~1"
+set "t=!t: =0!"
+set "t=!t:,=.!"
 
-:: Ensure leading zero safety via 1xx-100 trick
-set /a CS=(1%t:~0,2%-100)*360000 ^
-       + (1%t:~3,2%-100)*6000 ^
-       + (1%t:~6,2%-100)*100 ^
-       + (1%t:~9,2%-100)
+set /a CS=(1!t:~0,2!-100)*360000 + (1!t:~3,2!-100)*6000 + (1!t:~6,2!-100)*100 + (1!t:~9,2!-100)
 
 endlocal & set "%2=%CS%"
 exit /b
+
+
+:: -----------------------
+:: Log and also show on screen
+:: -----------------------
+:log
+echo %~1
+>>"%LOG_FILE%" echo %~1
+exit /b
+
 REM ======================================================
 REM  Copyright (c) 2025. by Yi GU <gu.yi.gu4@naist.ac.jp>,
 REM  Biomedical Imaging Intelligence Laboratory,
