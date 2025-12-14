@@ -16,7 +16,7 @@ set WSL_USER=ct81seg
 set SCRIPT_DIR=%~dp0
 set SCRIPT_DIR=%SCRIPT_DIR:~0,-1%
 set SRC_DIR=%SCRIPT_DIR%\src
-set LOG_DIR=%OUTPUT_DIR%\inference.log
+set LOG_PATH=%OUTPUT_DIR%\inference.log
 
 mkdir "%OUTPUT_DIR%"
 
@@ -31,7 +31,7 @@ set OUTPUT_DIR=%WSL_PATH%
 echo CT_IMAGE_PATH=%CT_IMAGE_PATH%
 echo OUTPUT_DIR=%OUTPUT_DIR%
 
-echo [Script start] >> %LOG_PATH%
+echo [Script start] %DATE% %TIME%>> "%LOG_PATH%"
 REM --- start time ---
 for /f "tokens=1-4 delims=:.," %%a in ("%TIME%") do (
     set /a "START_MS=(((1%%a-100)*3600 + (1%%b-100)*60 + (1%%c-100))*1000 + (1%%d-100))"
@@ -43,7 +43,7 @@ REM --- end time ---
 for /f "tokens=1-4 delims=:.," %%a in ("%TIME%") do (
     set /a "END_MS=(((1%%a-100)*3600 + (1%%b-100)*60 + (1%%c-100))*1000 + (1%%d-100))"
 )
-echo [Script end] >> %LOG_PATH%
+echo [Script end] %DATE% %TIME%>> "%LOG_PATH%"
 
 REM --- handle midnight wrap ---
 if !END_MS! LSS !START_MS! (
@@ -53,7 +53,7 @@ if !END_MS! LSS !START_MS! (
 set /a ELAPSED_MS=END_MS-START_MS
 set /a ELAPSED_SEC=ELAPSED_MS/1000
 
-echo Script elapsed: !ELAPSED_SEC! seconds >> %LOG_PATH%
+echo Script elapsed: !ELAPSED_SEC! seconds>> "%LOG_PATH%"
 
 endlocal
 pause
