@@ -320,7 +320,7 @@ class Main:
             image_load_time = time.perf_counter() - image_load_time_start
             _logger.info(f'Image loading time: {image_load_time:.2f} seconds.')
             self._time_summary['Loading image'] = image_load_time
-
+        if distributor.is_distributed():
             image, spacing, position, patient_info = distributor.broadcast_object(
                 image, spacing, position, patient_info
             )
