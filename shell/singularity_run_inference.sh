@@ -31,5 +31,5 @@ singularity exec --nv --nvccli \
     --dist_devices "${num_gpus}" \
     --dicom_name_regex ".*"
 end=$(date +%s)
-echo "[Script End] $(date)" 2>&1 | tee -a "${output_dir}"/inference.log
+echo "[Script end] $(date)" 2>&1 | tee -a "${output_dir}"/inference.log
 echo "Script elapsed: $((end - start)) sec" 2>&1 | tee -a "${output_dir}"/inference.log

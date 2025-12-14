@@ -28,11 +28,13 @@ set CT_IMAGE_PATH=%WSL_PATH%
 call :to_wsl_path %OUTPUT_DIR%
 set OUTPUT_DIR=%WSL_PATH%
 
+call :log "[Script start] %DATE% %TIME%"
 :: Record start time
 set "START_TIME=%TIME%"
 wsl -d %DISTRO_NAME% -u %WSL_USER% -- bash -lc "singularity exec --nv --nvccli --bind /mnt %SRC_DIR%/resources/py3.12-torch2.8-cu12.8_latest.sif python %SRC_DIR%/main.py --image_path %CT_IMAGE_PATH% --output_dir %OUTPUT_DIR% --dicom_name_regex %DICOM_NAME_REGEX% --n_workers %N_WORKERS% --batch_size %BATCH_SIZE% --device %DEVICE%"
 :: Record end time
 set "END_TIME=%TIME%"
+call :log "[Script end] %DATE% %TIME%"
 
 call :time_to_cs "%START_TIME%" START_CS
 call :time_to_cs "%END_TIME%"   END_CS
@@ -45,7 +47,7 @@ if %END_CS% LSS %START_CS% (
 set /a ELAPSED_CS=END_CS-START_CS
 set /a ELAPSED_SEC=ELAPSED_CS/100
 
-echo WSL command execution time: %ELAPSED_SEC% seconds
+call :log "Script elapsed: %ELAPSED_SEC% seconds"
 
 endlocal
 pause
