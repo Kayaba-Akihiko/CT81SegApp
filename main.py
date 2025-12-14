@@ -364,6 +364,7 @@ class Main:
 
         # Done using of image
         del image
+        gc.collect()
 
         mean_hu_calc_time = None
         if distributor.is_main_process():
