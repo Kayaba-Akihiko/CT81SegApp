@@ -5,6 +5,8 @@
 #  This file can not be copied and/or distributed
 #  without the express permission of Yi GU.
 
+__version__ = '0.0.1'
+
 import json
 import logging
 import argparse
@@ -36,6 +38,9 @@ class Main:
     def __init__(self):
         parser = argparse.ArgumentParser(
             formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+        parser.add_argument(
+            '--version', action='version', version=f'%(prog)s {__version__}')
 
         parser.add_argument(
             '--image_path', type=str,
@@ -152,14 +157,16 @@ class Main:
         self._output_dir = output_dir
 
     def run(self):
-        _logger.info('Start running ...')
+        if self._distributor.is_main_process():
+            _logger.info('Start running ...')
         try:
             self._run_body()
         except Exception as e:
             error_message = f'{e}\n{traceback.format_exc()}'
             _logger.error(error_message)
             raise e
-        _logger.info('Done.')
+        if self._distributor.is_main_process():
+            _logger.info('Done.')
 
     def _run_body(self):
         distributor = self._distributor
