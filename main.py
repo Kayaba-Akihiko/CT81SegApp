@@ -18,6 +18,7 @@ from typing import Tuple, List, Dict, Union, Literal
 
 import numpy as np
 import numpy.typing as npt
+import onnxruntime as ort
 
 from xmodules.logging import Logger
 from xmodules.xutils import os_utils, lib_utils, metaimage_utils, dicom_utils, array_utils as xp
@@ -224,6 +225,9 @@ def main():
         _logger.info(f'Config loading time: {config_load_time:.2f} seconds.')
 
     # Load model
+    if distributor.is_main_process():
+        _logger.info(f'ONNX Runtime device: {ort.get_device()}.')
+        _logger.info(f'Available execution providers: {ort.get_available_providers()}.')
     model_load_path = resources_root / f'{model_name}.onnx'
     norm_config_load_path = resources_root / f'{model_name}_norm.json'
     _check_path_exists(model_load_path, norm_config_load_path)

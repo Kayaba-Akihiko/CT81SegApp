@@ -15,7 +15,6 @@ import numpy as np
 import numpy.typing as npt
 import onnxruntime as ort
 import onnx
-from sklearn.tests.test_multiclass import n_classes
 
 from .data_normalizer import DataNormalizer
 from ..xutils import os_utils, array_utils as xp, image_utils
@@ -42,9 +41,6 @@ _logger = logging.getLogger(__name__)
 
 # Preload necessary DLLs
 ort.preload_dlls()
-
-_logger.info(f'ONNX Runtime device: {ort.get_device()}.')
-_logger.info(f'Available execution providers: {ort.get_available_providers()}.')
 
 @dataclass
 class ModelData:
@@ -127,6 +123,7 @@ class Inferencer:
                     _iob: ort.IOBinding,
                     _x: xp.TypeArrayLike[NPIntOrFloat],
             ):
+                _logger.info(f'{type(_x)=}')
                 _iob.bind_input(
                     name=input_name,
                     device_type='cuda',
