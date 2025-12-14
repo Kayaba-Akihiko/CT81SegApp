@@ -5,8 +5,6 @@
 #  This file can not be copied and/or distributed
 #  without the express permission of Yi GU.
 
-__version__ = '0.0.1'
-
 import json
 import logging
 import argparse
@@ -38,11 +36,6 @@ _logger = logging.getLogger(__name__)
 def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument(
-        "--version",
-        action="version",
-        version=f"%(prog)s {__version__}",
-    )
 
     parser.add_argument(
         '--image_path', type=str,
@@ -186,6 +179,7 @@ def main():
     elif device == 'cuda':
         onnx_providers = [
             ('CUDAExecutionProvider', {"device_id": distributor.local_rank}),
+            ('CPUExecutionProvider',)
         ]
     else:
         raise ValueError(
