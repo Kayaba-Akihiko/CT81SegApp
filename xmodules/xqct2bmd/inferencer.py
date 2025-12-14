@@ -215,15 +215,14 @@ class Inferencer:
             bind_in(io_binding, batch_slice)
             bind_out(io_binding, pred_logits)
             sess.run_with_iobinding(io_binding)
-            pred_logits_ = pred_logits.copy()
-            del pred_logits
+            pred_logits = pred_logits.copy()
 
             # (B, C, H, W)
-            pred_logits_ = restore_fn(pred_logits_)
+            pred_logits = restore_fn(pred_logits)
             pred_labelmap[start: end] = out_labelmap_to_array_fn(
-                argmax_fn(pred_logits_, axis=1), dtype=np.uint8
+                argmax_fn(pred_logits, axis=1), dtype=np.uint8
             )
-            del pred_logits_
+            del pred_logits
 
         return pred_labelmap
 
