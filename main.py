@@ -178,12 +178,13 @@ class Main:
                 'Loading config',
                 'Loading model',
                 'Loading image',
-                'HU calculation',
                 'Model Inference',
+                'HU calculation',
                 'Rendering report',
-                'Saving HU table',
                 'Saving labelmap',
-                'Saving report'
+                'Saving HU table',
+                'Saving report',
+                'Total'
             ]
             for k in keys:
                 if k in self._time_summary:
