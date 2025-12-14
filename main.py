@@ -171,7 +171,6 @@ class Main:
         if distributor.is_main_process():
             total_time_start = time.perf_counter()
 
-
         resources_root = THIS_DIR / 'resources'
         self._check_path_exists(resources_root)
 
@@ -326,7 +325,7 @@ class Main:
         del model_data
 
         if distributor.is_distributed():
-            image = xp.concatenate(self._gather_in_rank_order(distributor, image))
+            image = xp.concatenate(self._gather_in_rank_order(image))
 
         mean_hu_calc_time_start = None
         if distributor.is_main_process():
@@ -339,7 +338,7 @@ class Main:
             image = xp.to_cuda(image)
             pred_label = xp.to_cuda(pred_label)
             class_mean_hus, class_volumes, class_counts = self._compute_class_mean_hu_cuda(
-                distributor, image, pred_label, spacing, n_classes=n_classes)
+                image, pred_label, spacing, n_classes=n_classes)
             class_mean_hus = xp.to_numpy(class_mean_hus)
             class_counts = xp.to_numpy(class_counts)
             class_volumes = xp.to_numpy(class_volumes)
