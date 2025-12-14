@@ -51,7 +51,7 @@ TypeDeviceString: TypeAlias = str
 TypeDeviceLike: TypeAlias = Union[
     TypeDeviceType, TypeDeviceIndex, TypeDeviceString, 'torch.device', 'cp.cuda.Device']
 
-TypeArrayBackend: TypeAlias = Literal['numpy', 'cupy', 'torch']
+TypeArrayBackend: TypeAlias = Literal['numpy', 'cupy', 'torch', 'list']
 TypePadWidth: TypeAlias = Union[
     int, Sequence[int], Sequence[Sequence[int]], TypeArrayLike[NPInteger]]
 
@@ -335,6 +335,8 @@ class ArrayUtils:
             return 'cupy', x.device
         elif HAS_TORCH and isinstance(x, torch.Tensor):
             return 'torch', x.device
+        elif isinstance(x, list):
+            return 'list', 'cpu'
         else:
             raise TypeError(
                 f"Unsupported array type: {type(x)}. "
@@ -788,6 +790,8 @@ class ArrayUtils:
             elif backend == 'torch':
                 to_array_fn = functools.partial(
                     cls.to_torch, device='cpu')
+            elif backend == 'list':
+                to_array_fn = cls.to_list
             else:
                 raise ValueError(
                     f"Unsupported backend: {backend}. "
@@ -799,6 +803,8 @@ class ArrayUtils:
             elif backend == 'torch':
                 to_array_fn = functools.partial(
                     cls.to_torch, device='cpu')
+            elif backend == 'list':
+                to_array_fn = cls.to_list
             else:
                 raise ValueError(
                     f"Unsupported backend: {backend}. "
@@ -810,6 +816,8 @@ class ArrayUtils:
                     cls.to_torch, device='cpu')
             elif backend == 'numpy':
                 to_array_fn = cls.to_numpy
+            elif backend == 'list':
+                to_array_fn = cls.to_list
             else:
                 raise ValueError(
                     f"Unsupported backend: {backend}. "
