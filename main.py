@@ -532,6 +532,7 @@ class Main:
             start = distributor.global_rank * n_classes_per_rank
             end = start + n_classes_per_rank
             classes = classes[start: end]
+            assert image.device.id == distributor.local_rank
 
         hu_results, voxel_results = [], []
         for class_id in classes:
