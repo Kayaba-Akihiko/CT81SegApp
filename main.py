@@ -153,7 +153,7 @@ def main():
         _logger.info(config_log_str)
 
     if distributor.is_main_process():
-        _logger.info(f'Using distributor accelerator {opt.accelerator}')
+        _logger.info(f'Using distributor accelerator {opt.dist_accelerator}')
         _logger.info(f'Using distributor devices: {opt.devices}')
 
     resources_root = THIS_DIR / 'resources'
