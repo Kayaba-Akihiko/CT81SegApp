@@ -540,7 +540,7 @@ class ArrayUtils:
             with device_context:
                 try:
                     array = cp.asarray(array, dtype)
-                except TypeError as e:
+                except ValueError as e:
                     print(dtype)
                     raise e
         return array
