@@ -18,7 +18,8 @@ num_gpus=2
 # simg_path="${script_dir}"/src/resources/py3.12-torch2.8-cu12.8_latest.sif
 simg_path=/win/flounder/user/koku/sif/py3.12-torch2.8-cu12.8_latest.sif
 
-echo "[Start] $(date)"
+mkdir -p "${output_dir}"
+echo "[Script start] $(date)" >> "${output_dir}"/inference.log
 start=$(date +%s)
 singularity exec --nv --nvccli \
     --env LIBGL_ALWAYS_SOFTWARE=1 \
@@ -30,5 +31,5 @@ singularity exec --nv --nvccli \
     --dist_devices "${num_gpus}" \
     --dicom_name_regex ".*"
 end=$(date +%s)
-echo "[End] $(date)"
-echo "Elapsed: $((end - start)) sec"
+echo "[Script End] $(date)" >> "${output_dir}"/inference.log
+echo "Script elapsed: $((end - start)) sec" >> "${output_dir}"/inference.log
