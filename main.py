@@ -351,8 +351,8 @@ class Main:
             class_mean_hus, class_volumes, class_counts = self._compute_class_mean_hu_cpu(
                 image, pred_label, spacing, n_classes=n_classes)
         elif image_process_device == 'cuda':
-            image = xp.to_torch(image)
-            pred_label = xp.to_torch(pred_label)
+            image = xp.to_cupy(image)
+            pred_label = xp.to_cupy(pred_label)
             class_mean_hus, class_volumes, class_counts = self._compute_class_mean_hu_cuda(
                 image, pred_label, spacing, n_classes=n_classes)
             class_mean_hus = xp.to_numpy(class_mean_hus)

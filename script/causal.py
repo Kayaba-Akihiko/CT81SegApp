@@ -1,7 +1,7 @@
 
 
 from pathlib import Path
-from typing import Union, TypeAlias, Literal
+import numpy as np
 
 
 
@@ -12,6 +12,11 @@ def main():
     this_dir = this_file.parent
     output_dir = this_dir / f'out_{this_file.stem}'
     output_dir.mkdir(exist_ok=True, parents=True)
+
+
+    x = np.arange([True, True, False])
+    y = x.sum()
+    print(y, y.dtype)
 
 
 
