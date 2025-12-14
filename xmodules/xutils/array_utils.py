@@ -516,7 +516,6 @@ class ArrayUtils:
             dtype = cls.convert_dtype_to_numpy(dtype)
 
         device_context = nullcontext()
-        device_type, device_id, device_string = None, None, None
         if device is not None:
             device_type, device_id, device_string = cls.parse_device(device)
             if device_type != 'cuda':
@@ -536,7 +535,7 @@ class ArrayUtils:
             with device_context:
                 array = cp.asarray(array, dtype)
         else:
-            if device_id is not None:
+            with device_context:
                 array = cp.asarray(array, dtype)
         return array
 
