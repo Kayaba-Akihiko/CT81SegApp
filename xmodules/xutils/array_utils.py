@@ -144,6 +144,8 @@ class ArrayUtils:
             return True
         elif HAS_TORCH and isinstance(array, torch.Tensor):
             return True
+        elif isinstance(array, list):
+            return True
         return False
 
 
