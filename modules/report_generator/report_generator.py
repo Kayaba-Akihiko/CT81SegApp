@@ -383,6 +383,7 @@ class ReportGenerator:
             _var = np.sum(_weights * (_vars + _means ** 2)) - _mu ** 2
             return _mu, _var
 
+        # Copy template so that the original template can be reused
         report_ppt = self._report_ppt.copy()
 
         # '1' to '10' box plots
@@ -391,9 +392,10 @@ class ReportGenerator:
             if len(box_jobs) < self._distributor.world_size:
                 raise ValueError(f'Invalid box jobs: {box_jobs}')
             n_jobs_per_rank = (len(box_jobs) + self._distributor.world_size - 1) // self._distributor.world_size
-            start = self._distributor.global_rank * n_jobs_per_rank
-            end = start + n_jobs_per_rank
-            box_jobs = box_jobs[start: end]
+            box_jobs = box_jobs[
+                self._distributor.global_rank * n_jobs_per_rank:
+                self._distributor.global_rank * n_jobs_per_rank + n_jobs_per_rank
+            ]
 
         # Use dict to avoid duplicated class counts
         class_low_target_table = {}

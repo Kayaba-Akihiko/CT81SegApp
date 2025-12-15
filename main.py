@@ -289,7 +289,7 @@ class Main:
         model_data_load_time_start = None
         if distributor.is_main_process():
             model_data_load_time_start = time.perf_counter()
-        _logger.info(f'Loading model ...')
+            _logger.info(f'Loading model ...')
         model_data = Inferencer.get_model(
             model_path=model_load_path,
             norm_config_path=norm_config_load_path,
@@ -306,9 +306,9 @@ class Main:
 
         # Load image
         image, spacing, position, patient_info = None, None, None, None
-        _logger.info(f'Loading image from {image_path} .')
-        image_load_time_start = time.perf_counter()
         if distributor.is_main_process():
+            _logger.info(f'Loading image from {image_path} .')
+            image_load_time_start = time.perf_counter()
             image, spacing, position, patient_info = self._read_image(
                 image_path,
                 n_workers=n_workers,
@@ -316,8 +316,6 @@ class Main:
                 progress_desc='Reading image',
                 dicom_name_regex=opt.dicom_name_regex,
             )
-        image_load_time = None
-        if distributor.is_main_process():
             image_load_time = time.perf_counter() - image_load_time_start
             _logger.info(f'Image loading time: {image_load_time:.2f} seconds.')
             self._time_summary['Loading image'] = image_load_time
@@ -331,9 +329,10 @@ class Main:
             if (n_slices := len(image)) < distributor.world_size:
                 raise ValueError(f'Image size {len(image)} is less than world size {distributor.world_size}.')
             n_slices_per_rank = (n_slices + distributor.world_size - 1) // distributor.world_size
-            start = distributor.global_rank * n_slices_per_rank
-            end = start + n_slices_per_rank
-            image = image[start: end]
+            image = image[
+                distributor.global_rank * n_slices_per_rank:
+                distributor.global_rank * n_slices_per_rank + n_slices_per_rank
+            ]
 
         prepro_device: Literal['cpu', 'cuda'] = 'cpu'
         if image_process_device == 'cuda':

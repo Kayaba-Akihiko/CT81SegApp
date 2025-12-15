@@ -37,8 +37,6 @@ STRING_TO_ONNX_DTYPE_MAP = {
     'int16': onnx.TensorProto.INT16,
 }
 
-_logger = logging.getLogger(__name__)
-
 # Preload necessary DLLs
 ort.preload_dlls()
 
@@ -64,14 +62,12 @@ class Inferencer:
         # so.enable_mem_pattern = False
         # so.enable_cpu_mem_arena = False
         # so.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-        _logger.info(f'Load ONNX model from {model_path} .')
         session = ort.InferenceSession(
             # onnx_model.SerializeToString(),
             str(model_path.resolve()),
             sess_options=so,
             providers=onnx_providers,
         )
-        _logger.info(f'Load normalization config from {norm_config_path} .')
         data_norm = DataNormalizer.from_config_file(norm_config_path)
         return ModelData(
             session=session,
