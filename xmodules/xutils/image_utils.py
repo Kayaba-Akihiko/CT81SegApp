@@ -92,9 +92,13 @@ class ImageUtils:
     ) -> TypeArrayLike[T]:
         if isinstance(image, np.ndarray):
             if not HAS_SKIMAGE:
-                raise RuntimeError("skimage is required for resize() with numpy array input.")
+                raise RuntimeError(
+                    "skimage is required for resize() with numpy array input.")
             skt_lib = skt
         elif HAS_CUPY and isinstance(image, cp.ndarray):
+            if not HAS_CUCIM:
+                raise RuntimeError(
+                    "cucim is required for resize() with cupy array input.")
             skt_lib = cu_skt
         else:
             raise TypeError(f"Unsupported image type: {type(image)}.")
@@ -143,10 +147,14 @@ class ImageUtils:
     ) -> TypeArrayLike[T]:
         if isinstance(batch_image, np.ndarray):
             if not HAS_SKIMAGE:
-                raise RuntimeError("skimage is required for resize() with numpy array input.")
+                raise RuntimeError(
+                    "skimage is required for resize() with numpy array input.")
             skt_lib = skt
             np_lib = np
         elif HAS_CUPY and  isinstance(batch_image, cp.ndarray):
+            if not HAS_CUCIM:
+                raise RuntimeError(
+                    "cucim is required for resize() with cupy array input.")
             skt_lib = cu_skt
             np_lib = cp
         else:
@@ -269,8 +277,13 @@ class ImageUtils:
             pad_width: Union[int, npt.NDArray[np.int64]],
             mode: Literal["constant"] = "constant",
             constant_values: Union[float, Sequence[float]] = 0.0,
+            batched: bool = False,
     ) -> TypeArrayLike[T]:
-        pw = cls._normalize_pad_width(pad_width, image.ndim)
+        if batched:
+            pw = cls._normalize_pad_width(pad_width, image.ndim - 1)
+            pw = np.concatenate([np.zeros((1, 2), dtype=pw.dtype), pw])
+        else:
+            pw = cls._normalize_pad_width(pad_width, image.ndim)
         np_lib = np
         if HAS_CUPY:
             if isinstance(image, cp.ndarray):
@@ -303,9 +316,18 @@ class ImageUtils:
             cls,
             image: TypeArrayLike[T],
             pad_width: Union[int, npt.NDArray[np.int64]],
+            batched: bool = False,
     ) -> TypeArrayLike[T]:
-        pad_width = cls._normalize_pad_width(
-            pad_width=pad_width, ndim=image.ndim)
+        if batched:
+            pad_width = cls._normalize_pad_width(
+                pad_width=pad_width, ndim=image.ndim - 1)
+            pad_width = np.concatenate([
+                np.zeros((1, 2), dtype=pad_width.dtype),
+                pad_width,
+            ])
+        else:
+            pad_width = cls._normalize_pad_width(
+                pad_width=pad_width, ndim=image.ndim)
         slices: List[slice] = []
         for c in pad_width.tolist():
             e = None if c[1] == 0 else -c[1]
