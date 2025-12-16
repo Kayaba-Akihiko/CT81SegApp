@@ -46,5 +46,6 @@ if not %errorlevel%==0 (
 
 
 echo Done.
-pause
 endlocal
+pause
+exit /b 0
