@@ -78,6 +78,16 @@ class Main:
             default='cuda' if xp.is_cuda_available() else 'cpu',
         )
         parser.add_argument(
+            '--save_image', action='store_true', default=False,
+        )
+        parser.add_argument(
+            '--save_image_format', type=str, default='mha', choices=['mhd', 'mha'],
+        )
+        parser.add_argument(
+            '--report_dpi',
+            type=int, default=200,
+        )
+        parser.add_argument(
             '--dist_backend',
             type=str,
             choices=['none', 'fabric'],
@@ -95,11 +105,7 @@ class Main:
             default=1,
         )
         parser.add_argument(
-            '--report_dpi',
-            type=int, default=200,
-        )
-        parser.add_argument(
-            '-l', '--logging_level', type=str, default='INFO',
+            '--logging_level', type=str, default='INFO',
             help='INFO, DEBUG ...',
         )
 
@@ -181,6 +187,7 @@ class Main:
                 'Model Inference',
                 'HU calculation',
                 'Rendering report',
+                'Saving image',
                 'Saving labelmap',
                 'Saving HU table',
                 'Saving report',
@@ -323,6 +330,18 @@ class Main:
             image, spacing, position, patient_info = distributor.broadcast_object(
                 image, spacing, position, patient_info
             )
+
+        if distributor.is_main_process():
+            if self._opt.save_image:
+                if self._opt.save_image_format not in ['mha', 'mhd']:
+                    raise ValueError(f'Invalid save_ct_format: {self._opt.save_ct_format}')
+                save_path = output_dir / f'image.{self._opt.save_image_format}'
+                image_save_time_start = time.perf_counter()
+                metaimage_utils.write(save_path, image, spacing, position)
+                image_save_time = time.perf_counter() - image_save_time_start
+                _logger.info(f'Image saving time: {image_save_time:.2f} seconds.')
+                self._time_summary['Saving image'] = image_save_time
+
 
         if distributor.is_distributed():
             # Shard image
