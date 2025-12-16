@@ -62,7 +62,8 @@ call :log "Script elapsed: %ELAPSED_SEC% seconds"
 
 endlocal
 pause
-goto :eof   rem <-- make sure we don't "fall into" the function below
+exit /b 0
+:: goto :eof   rem <-- make sure we don't "fall into" the function below
 
 
 :: -----------------------

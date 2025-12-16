@@ -433,7 +433,7 @@ class Main:
         if distributor.is_main_process():
             labelmap_save_time_start = time.perf_counter()
             metaimage_utils.write(
-                output_dir / 'pred_label.mhd',
+                output_dir / 'pred_label.mha',
                 labelmap.astype(np.int16, copy=False),
                 spacing=spacing,
                 position=position,
