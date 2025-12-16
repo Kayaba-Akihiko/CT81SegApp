@@ -27,15 +27,8 @@ if not exist "%OUTPUT_DIR%" (
     mkdir "%OUTPUT_DIR%"
 )
 
-rem Debug: show raw value
-echo SAVE_IMAGE=[%SAVE_IMAGE%]
-
 echo(%SAVE_IMAGE%| findstr /I /X /C:"1" /C:"true" /C:"yes" >nul
 if %ERRORLEVEL%==0 set "SAVE_IMAGE_ARG=--save_image"
-
-echo "SAVE_IMAGE=%SAVE_IMAGE%"
-echo "SAVE_IMAGE_ARG=%SAVE_IMAGE_ARG%"
-pause
 
 rem Convert PROJECT_DIR to WSL path
 call :to_wsl_path %SRC_DIR%
