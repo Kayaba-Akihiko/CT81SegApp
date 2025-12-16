@@ -3,7 +3,7 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
-set "CT_IMAGE_PATH=G:\projects\ct81segapp_export\input\UZU00001_CT1_low"
+set "CT_IMAGE_PATH=G:\projects\ct81segapp_export\input\UZU00001_CT1"
 set "OUTPUT_DIR=G:\projects\ct81segapp_export\output"
 :: Number of workers for reading in dicom format.
 set N_WORKERS=8
@@ -15,6 +15,8 @@ set N_DEVICES=1
 :: set to "1" or "yes" or "true" to output ct (in mha format)
 set SAVE_IMAGE=false
 set DICOM_NAME_REGEX=\".*\"
+:: en or jp
+set REPORT_LANGUAGE=en
 
 set DISTRO_NAME=ct81seg-ubuntu
 set WSL_USER=ct81seg
@@ -23,15 +25,17 @@ set SCRIPT_DIR=%~dp0
 set SCRIPT_DIR=%SCRIPT_DIR:~0,-1%
 set SRC_DIR=%SCRIPT_DIR%\src
 set LOG_FILE=%OUTPUT_DIR%\inference.log
-if not exist "%OUTPUT_DIR%" (
-    mkdir "%OUTPUT_DIR%"
-)
+if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%"
 
 set SAVE_IMAGE_ARG=
 echo(%SAVE_IMAGE%| findstr /I /X /C:"1" /C:"true" /C:"yes" >nul
 if %ERRORLEVEL%==0 set "SAVE_IMAGE_ARG=--save_image"
 
-rem Convert PROJECT_DIR to WSL path
+set NV_ARG=
+echo(%DEVICE%| findstr /I /X /C:"cuda" >nul
+if %ERRORLEVEL%==0 set "NV_ARG=--nv --nvccli"
+
+rem Convert Windows DIR to WSL path
 call :to_wsl_path %SRC_DIR%
 set SRC_DIR=%WSL_PATH%
 call :to_wsl_path %CT_IMAGE_PATH%
@@ -42,7 +46,7 @@ set OUTPUT_DIR=%WSL_PATH%
 call :log "[Script start] %DATE% %TIME%"
 :: Record start time
 set "START_TIME=%TIME%"
-wsl -d %DISTRO_NAME% -u %WSL_USER% -- bash -lc "singularity exec --nv --nvccli --bind /mnt %SRC_DIR%/resources/py3.12-torch2.8-cu12.8_latest.sif python %SRC_DIR%/main.py --image_path %CT_IMAGE_PATH% --output_dir %OUTPUT_DIR% --dicom_name_regex %DICOM_NAME_REGEX% --n_workers %N_WORKERS% --batch_size %BATCH_SIZE% --device %DEVICE% --dist_devices %N_DEVICES% %SAVE_IMAGE_ARG%"
+wsl -d %DISTRO_NAME% -u %WSL_USER% -- bash -lc "singularity exec %NV_ARG% --bind /mnt %SRC_DIR%/resources/py3.12-torch2.8-cu12.8_latest.sif python %SRC_DIR%/main.py --image_path %CT_IMAGE_PATH% --output_dir %OUTPUT_DIR% --dicom_name_regex %DICOM_NAME_REGEX% --n_workers %N_WORKERS% --batch_size %BATCH_SIZE% --device %DEVICE% --dist_devices %N_DEVICES% %SAVE_IMAGE_ARG% --report_language %REPORT_LANGUAGE%"
 :: Record end time
 set "END_TIME=%TIME%"
 call :log "[Script end] %DATE% %TIME%"
