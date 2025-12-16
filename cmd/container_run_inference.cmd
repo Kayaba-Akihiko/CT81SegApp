@@ -27,6 +27,7 @@ if not exist "%OUTPUT_DIR%" (
     mkdir "%OUTPUT_DIR%"
 )
 
+set SAVE_IMAGE_ARG=
 echo(%SAVE_IMAGE%| findstr /I /X /C:"1" /C:"true" /C:"yes" >nul
 if %ERRORLEVEL%==0 set "SAVE_IMAGE_ARG=--save_image"
 
