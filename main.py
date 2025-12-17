@@ -134,6 +134,7 @@ class Main:
         )
         _logger.info(f'Launching distributor {distributor.backend}')
         distributor.launch()
+        distributor.seed_everything(831)
 
         output_dir = opt.output_dir
         if output_dir is None:
@@ -193,9 +194,9 @@ class Main:
                 'Loading model',
                 'Loading image',
                 'Model Inference',
+                'Cleaning labelmap',
                 'HU calculation',
                 'Rendering report',
-                'Cleaning labelmap',
                 'Saving image',
                 'Saving labelmap',
                 'Saving HU table',
@@ -620,6 +621,7 @@ class Main:
             return labelmap
 
         random.shuffle(target_classes)  # shuffle to balance load
+        target_classes = self._distributor.broadcast_object(target_classes)
         n_jobs = len(target_classes)
         if n_jobs < self._distributor.world_size:
             raise ValueError(f'Number of classes {n_jobs} is less than world size {self._distributor.world_size}.')
@@ -628,6 +630,7 @@ class Main:
         end = start + n_classes_per_rank
         target_classes = target_classes[start: end]
 
+        labelmap = xp.where(xp.isin(labelmap, target_classes), labelmap, xp.zeros_like(labelmap))
         labelmap = xqct2bmd_utils.keep_largest_connected_component_np(
             labelmap, target_class=target_classes,
             n_components=100, exclusion_volume_threshold=0.05,
