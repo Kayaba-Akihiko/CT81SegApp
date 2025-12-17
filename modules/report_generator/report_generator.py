@@ -6,7 +6,7 @@
 #  without the express permission of Yi GU.
 
 
-from typing import IO, Self, Tuple, Optional, Union, Dict, Any, TypeAlias, Literal, Type, TypeVar, Protocol, List, Sequence
+from typing import Self, Tuple, Optional, Union, Dict, Any, TypeAlias, Literal, Type, TypeVar, Protocol, List, Sequence
 from pathlib import Path
 from collections import OrderedDict
 import json
@@ -124,6 +124,7 @@ class ReportGenerator:
                 TypePathLike,
             ],
             observation_messages: Union[Dict[int, str], TypePathLike],
+            language: Literal['jp', 'en'] = 'en'
     ):
         self._distributor = distributor
         if os_utils.is_path_like(template_ppt):
@@ -139,6 +140,9 @@ class ReportGenerator:
                 self._hu_statistics_df = hu_statistics_table.clone()
             else:
                 raise TypeError(f'Invalid hu_statistics_table type: {type(hu_statistics_table)=}')
+
+
+
         if self._distributor.is_distributed():
             self._hu_statistics_df = distributor.broadcast_object(
                 self._hu_statistics_df)
@@ -267,6 +271,7 @@ class ReportGenerator:
             observation_messages = self._distributor.broadcast_object(observation_messages)
         assert isinstance(observation_messages, dict)
         self._observation_messages = observation_messages
+        self._language = language
 
     def generate_hu_table(
             self,
@@ -383,6 +388,7 @@ class ReportGenerator:
             _var = np.sum(_weights * (_vars + _means ** 2)) - _mu ** 2
             return _mu, _var
 
+        # Copy template so that the original template can be reused
         report_ppt = self._report_ppt.copy()
 
         # '1' to '10' box plots
@@ -391,9 +397,10 @@ class ReportGenerator:
             if len(box_jobs) < self._distributor.world_size:
                 raise ValueError(f'Invalid box jobs: {box_jobs}')
             n_jobs_per_rank = (len(box_jobs) + self._distributor.world_size - 1) // self._distributor.world_size
-            start = self._distributor.global_rank * n_jobs_per_rank
-            end = start + n_jobs_per_rank
-            box_jobs = box_jobs[start: end]
+            box_jobs = box_jobs[
+                self._distributor.global_rank * n_jobs_per_rank:
+                self._distributor.global_rank * n_jobs_per_rank + n_jobs_per_rank
+            ]
 
         # Use dict to avoid duplicated class counts
         class_low_target_table = {}
@@ -407,7 +414,7 @@ class ReportGenerator:
             for class_id in class_group_data.class_ids:
                 class_df = age_sex_hu_df.filter(pl.col('class_id') == class_id)
                 if len(class_df) <= 0:
-                    raise ValueError(f'No data for class {class_id=}')
+                    mean, std = np.nan, np.nan
                 elif len(class_df) > 1:
                     # merge distributions
                     mean, std = np.einsum(
@@ -472,7 +479,7 @@ class ReportGenerator:
         del low_target_ratio, class_low_target_table
         report_ppt.fill_texts(
             self._build_text_placeholders(
-                patient_info, observation, language='jp')
+                patient_info, observation, language=self._language)
         )
         del observation
 

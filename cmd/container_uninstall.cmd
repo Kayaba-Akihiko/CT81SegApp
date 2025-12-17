@@ -22,5 +22,6 @@ if not %errorlevel%==0 (
     wsl --unregister %DISTRO_NAME%
 )
 echo Done.
-pause
 endlocal
+pause
+exit /b 0

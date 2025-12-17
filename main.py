@@ -10,10 +10,11 @@ __version__ = '0.0.1'
 import json
 import logging
 import argparse
+import random
 from pathlib import Path
 import time
 import traceback
-from typing import Tuple, Literal, OrderedDict
+from typing import Tuple, Literal, OrderedDict, TypeAlias
 import gc
 
 import numpy as np
@@ -24,8 +25,11 @@ from xmodules.logging import Logger
 from xmodules.xutils import os_utils, lib_utils, metaimage_utils, dicom_utils, array_utils as xp
 from xmodules.xdistributor import get_distributor
 from xmodules.xqct2bmd.inferencer import Inferencer
+from xmodules.xqct2bmd import utils as xqct2bmd_utils
 
 from modules.report_generator import ReportGenerator, PatientInfoData
+
+TypeArrayLike: TypeAlias = xp.TypeArrayLike[xp._NPDType]
 
 HAS_FABRIC = lib_utils.import_available('lightning.fabric')
 THIS_FILE = Path(__file__)
@@ -78,6 +82,18 @@ class Main:
             default='cuda' if xp.is_cuda_available() else 'cpu',
         )
         parser.add_argument(
+            '--save_image', action='store_true', default=False,
+        )
+        parser.add_argument(
+            '--save_image_format', type=str, default='mha', choices=['mhd', 'mha'],
+        )
+        parser.add_argument(
+            '--report_dpi',
+            type=int, default=200,
+        )
+        parser.add_argument(
+            '--report_language', type=str, default='en', choices=['en', 'jp'])
+        parser.add_argument(
             '--dist_backend',
             type=str,
             choices=['none', 'fabric'],
@@ -95,11 +111,7 @@ class Main:
             default=1,
         )
         parser.add_argument(
-            '--report_dpi',
-            type=int, default=200,
-        )
-        parser.add_argument(
-            '-l', '--logging_level', type=str, default='INFO',
+            '--logging_level', type=str, default='INFO',
             help='INFO, DEBUG ...',
         )
 
@@ -122,6 +134,7 @@ class Main:
         )
         _logger.info(f'Launching distributor {distributor.backend}')
         distributor.launch()
+        distributor.seed_everything(831)
 
         output_dir = opt.output_dir
         if output_dir is None:
@@ -160,6 +173,8 @@ class Main:
             _logger.info(f'Using distributor devices: {opt.dist_devices}')
 
         self._opt = opt
+        self._n_classes = 81
+        self._accelerator_type = opt.dist_accelerator
         self._distributor = distributor
         self._output_dir = output_dir
         self._time_summary = {}
@@ -179,11 +194,13 @@ class Main:
                 'Loading model',
                 'Loading image',
                 'Model Inference',
+                'Cleaning labelmap',
                 'HU calculation',
                 'Rendering report',
+                'Saving image',
                 'Saving labelmap',
                 'Saving HU table',
-                'Saving report',
+                'Printing report',
                 'Total'
             ]
             for k in keys:
@@ -219,7 +236,7 @@ class Main:
         if distributor.is_main_process():
             _logger.info(f'Using model {model_name}.')
 
-        n_classes = 81
+        n_classes = self._n_classes
         resolution = 512
         batch_size = opt.batch_size
         if batch_size <= 0:
@@ -250,12 +267,13 @@ class Main:
         # ----
 
         # Load configuration
-        template_path = resources_root / 'MICBON_AI_report_template_p3.pptx'
+        language: Literal['en', 'jp'] = opt.report_language
+        template_path = resources_root / f'MICBON_AI_report_template_{language}.pptx'
         hu_statistics_table_path = resources_root / 'hu_statistics.xlsx'
         rendering_config = resources_root / 'rendering_config.toml'
         class_table_path = resources_root / 'class_table.csv'
         class_groups_path = resources_root / 'class_groups.json'
-        observation_messages_path = resources_root / 'observation_messages_jp.toml'
+        observation_messages_path = resources_root / f'observation_messages_{language}.toml'
         self._check_path_exists(
             template_path, hu_statistics_table_path, rendering_config,
             class_table_path, class_groups_path, observation_messages_path,
@@ -272,8 +290,8 @@ class Main:
             class_info_table=class_table_path,
             class_groups=class_groups_path,
             observation_messages=observation_messages_path,
+            language=language,
         )
-        config_load_time = None
         if distributor.is_main_process():
             config_load_time = time.perf_counter() - config_load_time_start
             _logger.info(f'Config loading time: {config_load_time:.2f} seconds.')
@@ -289,7 +307,7 @@ class Main:
         model_data_load_time_start = None
         if distributor.is_main_process():
             model_data_load_time_start = time.perf_counter()
-        _logger.info(f'Loading model ...')
+            _logger.info(f'Loading model ...')
         model_data = Inferencer.get_model(
             model_path=model_load_path,
             norm_config_path=norm_config_load_path,
@@ -301,14 +319,12 @@ class Main:
             model_data_load_time = time.perf_counter() - model_data_load_time_start
             _logger.info(f'Model loading time: {model_data_load_time:.2f} seconds.')
             self._time_summary['Loading model'] = model_data_load_time
-        else:
-            model_data_load_time = None
 
         # Load image
         image, spacing, position, patient_info = None, None, None, None
-        _logger.info(f'Loading image from {image_path} .')
-        image_load_time_start = time.perf_counter()
         if distributor.is_main_process():
+            _logger.info(f'Loading image from {image_path} .')
+            image_load_time_start = time.perf_counter()
             image, spacing, position, patient_info = self._read_image(
                 image_path,
                 n_workers=n_workers,
@@ -316,8 +332,6 @@ class Main:
                 progress_desc='Reading image',
                 dicom_name_regex=opt.dicom_name_regex,
             )
-        image_load_time = None
-        if distributor.is_main_process():
             image_load_time = time.perf_counter() - image_load_time_start
             _logger.info(f'Image loading time: {image_load_time:.2f} seconds.')
             self._time_summary['Loading image'] = image_load_time
@@ -326,14 +340,29 @@ class Main:
                 image, spacing, position, patient_info
             )
 
+        if distributor.is_main_process():
+            # Save image if required
+            if self._opt.save_image:
+                if self._opt.save_image_format not in ['mha', 'mhd']:
+                    raise ValueError(f'Invalid save_ct_format: {self._opt.save_ct_format}')
+                save_path = output_dir / f'image.{self._opt.save_image_format}'
+                _logger.info(f'Saving image to ...')
+                image_save_time_start = time.perf_counter()
+                metaimage_utils.write(save_path, image, spacing, position)
+                image_save_time = time.perf_counter() - image_save_time_start
+                _logger.info(f'Image saving time: {image_save_time:.2f} seconds.')
+                self._time_summary['Saving image'] = image_save_time
+
+
         if distributor.is_distributed():
             # Shard image
             if (n_slices := len(image)) < distributor.world_size:
                 raise ValueError(f'Image size {len(image)} is less than world size {distributor.world_size}.')
             n_slices_per_rank = (n_slices + distributor.world_size - 1) // distributor.world_size
-            start = distributor.global_rank * n_slices_per_rank
-            end = start + n_slices_per_rank
-            image = image[start: end]
+            image = image[
+                distributor.global_rank * n_slices_per_rank:
+                distributor.global_rank * n_slices_per_rank + n_slices_per_rank
+            ]
 
         prepro_device: Literal['cpu', 'cuda'] = 'cpu'
         if image_process_device == 'cuda':
@@ -342,11 +371,11 @@ class Main:
                 prepro_device = 'cuda'
 
         if distributor.is_main_process():
-            _logger.info(f'Run model inference')
+            _logger.info(f'Inferencing ...')
 
-        start_time = None
+        model_inference_time_start = None
         if distributor.is_main_process():
-            start_time = time.perf_counter()
+            model_inference_time_start = time.perf_counter()
         pred_label = Inferencer.ct_inference_proxy(
             image=image,
             model_data=model_data,
@@ -358,17 +387,30 @@ class Main:
             progress_desc='Inferencing',
         ).astype(np.uint8, copy=False)
         if distributor.is_distributed():
+            # Collect distributed results
             pred_label = xp.concatenate(distributor.all_gather_object(pred_label))
-        model_inference_time = None
         if distributor.is_main_process():
-            model_inference_time = time.perf_counter() - start_time
+            model_inference_time = time.perf_counter() - model_inference_time_start
             _logger.info(
                 f'Model inference time: {model_inference_time:.2f} seconds.')
             self._time_summary['Model Inference'] = model_inference_time
         del model_data
         gc.collect()
 
+
+        # clean labelmap
+        clean_labelmap_time_start = None
+        if distributor.is_main_process():
+            _logger.info(f'Cleaning labelmap ...')
+            clean_labelmap_time_start = time.perf_counter()
+        pred_label = self._clean_labelmap_np(pred_label, device=image_process_device)
+        if distributor.is_main_process():
+            clean_labelmap_time = time.perf_counter() - clean_labelmap_time_start
+            _logger.info(f'Cleaning labelmap time: {clean_labelmap_time:.2f} seconds.')
+            self._time_summary['Cleaning labelmap'] = clean_labelmap_time
+
         if distributor.is_distributed():
+            # Recollect image for rendering
             image = xp.concatenate(distributor.all_gather_object(image))
 
         mean_hu_calc_time_start = None
@@ -388,21 +430,20 @@ class Main:
             class_volumes = xp.to_numpy(class_volumes)
         else:
             raise ValueError(f'Invalid image_process_device: {image_process_device}')
-
-        # Done using of image
-        del image
-
-        mean_hu_calc_time = None
         if distributor.is_main_process():
             mean_hu_calc_time = time.perf_counter() - mean_hu_calc_time_start
             _logger.info(f'Class mean HU calculation time: {mean_hu_calc_time:.2f} seconds.')
             self._time_summary['HU calculation'] = mean_hu_calc_time
 
-        hu_table_save_time = None
+        # Done using of image
+        del image
+
+        # Save HU table
         if distributor.is_main_process():
             hu_df = report_generator.generate_hu_table(
                 class_mean_hus=class_mean_hus, class_volumes=class_volumes
             )
+            _logger.info(f'Saving HU table ...')
             hu_table_save_time_start = time.perf_counter()
             hu_df.write_csv(output_dir / 'hu_table.csv')
             hu_table_save_time = time.perf_counter() - hu_table_save_time_start
@@ -410,12 +451,13 @@ class Main:
             self._time_summary['Saving HU table'] = hu_table_save_time
             del hu_df
 
+        # Force labelmap to cpu for saving
         labelmap: npt.NDArray[np.uint8] = xp.to_numpy(pred_label).astype(np.uint8, copy=False)
-        labelmap_save_time = None
         if distributor.is_main_process():
+            _logger.info(f'Saving labelmap ...')
             labelmap_save_time_start = time.perf_counter()
             metaimage_utils.write(
-                output_dir / 'pred_label.mhd',
+                output_dir / 'pred_label.mha',
                 labelmap.astype(np.int16, copy=False),
                 spacing=spacing,
                 position=position,
@@ -424,7 +466,7 @@ class Main:
             _logger.info(f'Labelmap saving time: {labelmap_save_time:.2f} seconds.')
             self._time_summary['Saving labelmap'] = labelmap_save_time
 
-
+        # Rendering report
         report_rendering_time_start = None
         if distributor.is_main_process():
             _logger.info(f'Generating report ...')
@@ -436,12 +478,12 @@ class Main:
             class_mean_hus=class_mean_hus,
             device='cuda',
         )
-        report_rendering_time = None
         if distributor.is_main_process():
             report_rendering_time = time.perf_counter() - report_rendering_time_start
             _logger.info(f'Report rendering time: {report_rendering_time:.2f} seconds.')
             self._time_summary['Rendering report'] = report_rendering_time
 
+        # Check report printing DPI
         report_save_dpi = opt.report_dpi
         if report_save_dpi < 10 or report_save_dpi > 1000:
             # ignore
@@ -449,8 +491,8 @@ class Main:
                 _logger.warning(f'Invalid report dpi: {report_save_dpi}. Reset to 200')
             report_save_dpi = 200
 
-        report_saving_time = None
         if distributor.is_main_process():
+            _logger.info(f'Printing report ...')
             report_saving_time_start = time.perf_counter()
             report_ppt.save(
                 pdf_save_path=output_dir / 'report.pdf',
@@ -458,10 +500,9 @@ class Main:
                 dpi=report_save_dpi,
             )
             report_saving_time = time.perf_counter() - report_saving_time_start
-            _logger.info(f'Report saving time: {report_saving_time:.2f} seconds.')
-            self._time_summary['Saving report'] = report_saving_time
+            _logger.info(f'Report printing time: {report_saving_time:.2f} seconds.')
+            self._time_summary['Printing report'] = report_saving_time
 
-        total_time = None
         if distributor.is_main_process():
             total_time = time.perf_counter() - total_time_start
             _logger.info(f'Total time: {total_time:.2f} seconds.')
@@ -566,6 +607,40 @@ class Main:
         voxel_results = xp.to_dst(voxel_results, dst=image, dtype=np.int64)
         volume_results = xp.to(voxel_results, dtype='float64') * spacing.prod().item() * 1e-3  # mm3 -> cm3
         return hu_results, volume_results, voxel_results,
+
+    def _clean_labelmap_np[T: TypeArrayLike](self, labelmap: T, device: Literal['cpu', 'cuda']) -> T:
+
+        if device == 'cuda':
+            labelmap = xp.to_cupy(labelmap)
+        target_classes = list(range(1, self._n_classes))
+        if not self._distributor.is_distributed():
+            labelmap =  xqct2bmd_utils.keep_largest_connected_component_np(
+                labelmap, target_class=target_classes,
+                n_components=100, exclusion_volume_threshold=0.05,
+            )
+            return labelmap
+
+        random.shuffle(target_classes)  # shuffle to balance load
+        target_classes = self._distributor.broadcast_object(target_classes)
+        n_jobs = len(target_classes)
+        if n_jobs < self._distributor.world_size:
+            raise ValueError(f'Number of classes {n_jobs} is less than world size {self._distributor.world_size}.')
+        n_classes_per_rank = (n_jobs + self._distributor.world_size - 1) // self._distributor.world_size
+        start = self._distributor.global_rank * n_classes_per_rank
+        end = start + n_classes_per_rank
+        target_classes = target_classes[start: end]
+
+        labelmap = xp.where(xp.isin(labelmap, target_classes), labelmap, xp.zeros_like(labelmap))
+        labelmap = xqct2bmd_utils.keep_largest_connected_component_np(
+            labelmap, target_class=target_classes,
+            n_components=100, exclusion_volume_threshold=0.05,
+        )
+        labelmap = xp.to_torch(labelmap, device=self._accelerator_type)
+
+        # merge rank results
+        labelmap = self._distributor.all_reduce(labelmap, reduce_op='sum')
+
+        return xp.to_cupy(labelmap) if device == 'cuda' else xp.to_numpy(labelmap)
 
     @classmethod
     def _check_path_exists(cls, *path: Path):

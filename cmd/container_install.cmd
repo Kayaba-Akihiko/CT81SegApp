@@ -7,44 +7,70 @@ REM  All rights reserved.
 REM  This file can not be copied and/or distributed
 REM  without the express permission of Yi GU.
 REM ======================================================
-setlocal
+
+setlocal EnableExtensions EnableDelayedExpansion
 
 rem ===== CONFIG =====
-set DISTRO_NAME=ct81seg-ubuntu
-set WSL_USER=ct81seg
+set "DISTRO_NAME=ct81seg-ubuntu"
+set "WSL_USER=ct81seg"
 rem ===================
 
-set SCRIPT_DIR=%~dp0
-set SCRIPT_DIR=%SCRIPT_DIR:~0,-1%
-set SRC_DIR=%SCRIPT_DIR%\src
+set "SCRIPT_DIR=%~dp0"
+set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
+set "SRC_DIR=%SCRIPT_DIR%\src"
 
-echo Installing WSL platform (if needed)...
+echo.
+echo ===== Enabling required Windows features for WSL =====
+dism /online /get-featureinfo /featurename:VirtualMachinePlatform | findstr /I "Enabled" >nul
+if not %errorlevel%==0 (
+    echo Enabling Virtual Machine Platform...
+    dism /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
+    set NEED_REBOOT=1
+)
+
+if defined NEED_REBOOT (
+    echo.
+    echo [IMPORTANT] Windows features were enabled.
+    echo Please REBOOT the machine and re-run this script.
+    pause
+    exit /b 0
+)
+
+echo.
+echo ===== Installing WSL platform (if needed) =====
 wsl --install --no-distribution >nul 2>&1
 
-echo Checking if %DISTRO_NAME% is installed...
+echo.
+echo ===== Checking if %DISTRO_NAME% is installed =====
 wsl -d %DISTRO_NAME% -- echo OK >nul 2>&1
 if not %errorlevel%==0 (
     echo %DISTRO_NAME% is NOT installed.
     echo Installing %DISTRO_NAME% to "%LOCALAPPDATA%\wsl\%DISTRO_NAME%" ...
-    mkdir "%LOCALAPPDATA%\wsl"
-    wsl --import "%DISTRO_NAME%" "%LOCALAPPDATA%\wsl\%DISTRO_NAME%" "%SRC_DIR%\resources\%DISTRO_NAME%.tar"
-    rem Optional: wait a bit
+
+    if not exist "%LOCALAPPDATA%\wsl" mkdir "%LOCALAPPDATA%\wsl"
+
+    wsl --import "%DISTRO_NAME%" ^
+        "%LOCALAPPDATA%\wsl\%DISTRO_NAME%" ^
+        "%SRC_DIR%\resources\%DISTRO_NAME%.tar"
+
     timeout /t 5 /nobreak >nul
 ) else (
-    echo %DISTRO_NAME% is installed. Skipping installation.
+    echo %DISTRO_NAME% is already installed. Skipping.
 )
 
-echo Verifying %DISTRO_NAME% ...
+echo.
+echo ===== Verifying %DISTRO_NAME% =====
 wsl -d %DISTRO_NAME% -- echo OK >nul 2>&1
 if not %errorlevel%==0 (
     echo.
     echo [ERROR] %DISTRO_NAME% cannot be started.
-    echo   - If this is the first time of WSL installation, please REBOOT the machine and rerun this script again.
+    echo   - Pleas restart and try again.
     pause
-    goto :EOF
+    exit /b 1
 )
 
-
-echo Done.
-pause
+echo.
+echo ===== WSL setup completed successfully =====
 endlocal
+pause
+exit /b 0

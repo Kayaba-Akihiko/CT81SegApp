@@ -140,8 +140,8 @@ class DicomUtils:
 
         # create 3D array
         img_shape = list(slices[0].pixel_array.shape)
-        img3d = np.empty((len(slices), *img_shape))
-
+        dtype = slices[0].pixel_array.dtype
+        img3d = np.empty((len(slices), *img_shape), dtype=dtype)
         # (z, y, x)
         # fill 3D array with the images from the files
         for i, s in enumerate(slices):

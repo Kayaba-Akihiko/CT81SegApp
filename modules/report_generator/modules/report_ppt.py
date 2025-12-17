@@ -30,6 +30,9 @@ from pptx.slide import (
     SlideShapes as PPTXSlideShapes
 )
 from pptx import Presentation as create_presentation
+from pptx.oxml.ns import qn
+from pptx.oxml.xmlchemy import OxmlElement
+from pptx.enum.shapes import MSO_SHAPE_TYPE
 
 from xmodules.xutils import os_utils
 from xmodules.typing import TypePathLike
@@ -62,9 +65,10 @@ class ReportPPT:
             raise ValueError(f'Invalid fit mode: {fit_mode}')
         self.fit_mode = fit_mode
         if isinstance(template, PPTXPresentation):
-            self.presentation = self.clone_presentation(template)
+            self.presentation = self._clone_presentation(template)
         else:
-            self.presentation = create_presentation(str(template))
+            template = str(template) if os_utils.is_path_like(template) else template
+            self.presentation = create_presentation(template)
 
     def copy(self) -> Self:
         return ReportPPT(self.presentation, fit_mode=self.fit_mode)
@@ -230,14 +234,20 @@ class ReportPPT:
         if not pptx_save_path and not pdf_save_path and not image_save_path:
             raise ValueError('One path must be specified.')
 
+        # presentation = self._clone_presentation(self.presentation)
+        # self._apply_cjk_font(presentation, cjk_font="Noto Sans CJK JP", latin_font=None)
+
+        presentation = self.presentation
+
+
         if pptx_save_path is not None:
             if os_utils.is_path_like(pptx_save_path):
                 pptx_save_path = os_utils.format_path_string(pptx_save_path)
                 pptx_save_path.parent.mkdir(parents=True, exist_ok=True)
-                self.presentation.save(str(pptx_save_path))
+                presentation.save(str(pptx_save_path))
             else:
                 # If caller passes an IO, python-pptx can save to it directly.
-                self.presentation.save(pptx_save_path)
+                presentation.save(pptx_save_path)
 
         if pdf_save_path or image_save_path is not None:
             # In memory temp file
@@ -247,7 +257,7 @@ class ReportPPT:
                     temp_pptx_path = pptx_save_path
                 else:
                     temp_pptx_path = temp_dir / "temp_ppt.pptx"
-                    self.presentation.save(str(temp_pptx_path))
+                    presentation.save(str(temp_pptx_path))
 
                 # Use an isolated LO profile to avoid lock/hang issues
                 profile_dir = temp_dir / "profile"
@@ -345,7 +355,7 @@ class ReportPPT:
         return pic
 
     @staticmethod
-    def clone_presentation(presentation: PPTXPresentation) -> PPTXPresentation:
+    def _clone_presentation(presentation: PPTXPresentation) -> PPTXPresentation:
         buffer = io.BytesIO()
         presentation.save(buffer)
         buffer.seek(0)
@@ -376,6 +386,60 @@ class ReportPPT:
         user_dir.mkdir(parents=True, exist_ok=True)
         (user_dir / "registrymodifications.xcu").write_text(reg_xcu, encoding="utf-8")
 
+    @staticmethod
+    def _set_run_script_fonts(run, *, east_asian=None, latin=None, complex_script=None):
+        """
+        Set script-specific fonts on a python-pptx Run:
+          - latin -> <a:latin typeface="...">
+          - east_asian -> <a:ea typeface="...">   (Japanese/Chinese/Korean)
+          - complex_script -> <a:cs typeface="...">
+        """
+        rPr = run._r.get_or_add_rPr()
+
+        if latin:
+            el = rPr.find(qn("a:latin"))
+            if el is None:
+                el = OxmlElement("a:latin")
+                rPr.append(el)
+            el.set("typeface", latin)
+
+        if east_asian:
+            el = rPr.find(qn("a:ea"))
+            if el is None:
+                el = OxmlElement("a:ea")
+                rPr.append(el)
+            el.set("typeface", east_asian)
+
+        if complex_script:
+            el = rPr.find(qn("a:cs"))
+            if el is None:
+                el = OxmlElement("a:cs")
+                rPr.append(el)
+            el.set("typeface", complex_script)
+
+    @classmethod
+    def _apply_cjk_font(
+            cls,
+            presentation,
+            cjk_font="Noto Sans CJK JP",
+            latin_font=None,
+    ):
+        for slide in presentation.slides:
+            for shape in slide.shapes:
+                # groups: recurse
+                shapes = [shape]
+                if shape.shape_type == MSO_SHAPE_TYPE.GROUP:
+                    shapes = list(shape.shapes)
+
+                for sh in shapes:
+                    if not getattr(sh, "has_text_frame", False):
+                        continue
+                    tf = sh.text_frame
+                    for para in tf.paragraphs:
+                        for run in para.runs:
+                            # Only set East Asian; leave Latin unchanged unless you explicitly want to set it
+                            cls._set_run_script_fonts(
+                                run, east_asian=cjk_font, latin=latin_font)
 
 REG_XCU = """
 <?xml version="1.0" encoding="UTF-8"?>

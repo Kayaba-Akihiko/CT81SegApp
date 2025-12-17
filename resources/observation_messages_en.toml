@@ -1,0 +1,20 @@
+
+
+1 = """\
+Your muscle quality is within a good or average range compared with people of the same sex and age.\
+However, as people grow older, even average values may be associated with a decline in muscle strength and an increased risk of falls.\
+Therefore, it is important to continue maintaining a well-balanced diet and engaging in appropriate physical activity (preferably under the guidance of a physician or qualified specialist).\
+"""
+
+2 = """\
+Your muscle quality tends to be slightly lower compared with people of the same sex and age.\
+In older age, even a small decline in muscle quality can affect daily functioning.\
+It is therefore recommended that you adjust your diet and exercise habits (preferably under the guidance of a physician or qualified specialist) and seek professional advice when necessary.\
+"""
+
+3 = """\
+Your muscle quality shows a low tendency compared with people of the same sex and age.\
+In older age, even average levels are known to be associated with an increased risk of falls and the need for long-term care.\
+We recommend that you consult a medical or rehabilitation specialist at an early stage.\
+"""
+
