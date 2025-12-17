@@ -503,6 +503,10 @@ class ArrayUtils:
             return array.tolist()
         elif HAS_CUPY and isinstance(array, cp.ndarray):
             return cp.asnumpy(array).tolist()
+        elif isinstance(array, list):
+            return array
+        elif isinstance(array, tuple):
+            return list(array)
         else:
             raise TypeError(
                 f"Unsupported array type: {type(array)}. "
