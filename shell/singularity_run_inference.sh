@@ -9,11 +9,11 @@
 #
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
-ct_input=${script_dir}/input/UZU00001_CT1_low
+ct_input=${script_dir}/input/UZU00001_CT1
 output_dir=${script_dir}/output
 batch_size=2
 num_core=8
-num_gpus=2
+num_gpus=1
 
 simg_path="${script_dir}"/src/resources/py3.12-torch2.8-cu12.8_latest.sif
 #simg_path=/win/flounder/user/koku/sif/py3.12-torch2.8-cu12.8_latest.sif
