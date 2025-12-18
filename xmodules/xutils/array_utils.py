@@ -1161,10 +1161,10 @@ class ArrayUtils:
             _to_array_fn = cls.to_numpy
         elif HAS_CUPY and isinstance(array, cp.ndarray):
             _isin_fn = cp.isin
-            _to_array_fn = cls.to_cupy
+            _to_array_fn = functools.partial(cls.to_cupy, device=array.device)
         elif HAS_TORCH and isinstance(array, torch.Tensor):
             _isin_fn = torch.isin
-            _to_array_fn = cls.to_torch
+            _to_array_fn = functools.partial(cls.to_torch, device=array.device)
         else:
             raise TypeError(
                 f"Unsupported array type: {type(array)}. "
@@ -1186,10 +1186,10 @@ class ArrayUtils:
             _to_array_fn = cls.to_numpy
         elif HAS_CUPY and isinstance(condition, cp.ndarray):
             _where_fn = cp.where
-            _to_array_fn = cls.to_cupy
+            _to_array_fn = functools.partial(cls.to_cupy, device=condition.device)
         elif HAS_TORCH and isinstance(condition, torch.Tensor):
             _where_fn = torch.where
-            _to_array_fn = cls.to_torch
+            _to_array_fn = functools.partial(cls.to_torch, device=condition.device)
         else:
             raise TypeError(
                 f"Unsupported condition type: {type(condition)}. "
