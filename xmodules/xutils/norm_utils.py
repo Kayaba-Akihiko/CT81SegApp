@@ -189,7 +189,7 @@ def _norm_base[T: NPGeneric](
 
 
     if batched:
-        assert array.ndim > 3, f'{array.shape=}'
+        assert array.ndim > 2, f'{array.shape=}'
         # (B, 4, C) or (B, C, 4)
         assert statistics.ndim == 3, f'{statistics.shape}'
         if channel_first:
@@ -199,7 +199,7 @@ def _norm_base[T: NPGeneric](
             # (B, 4, C)
             split_axis = 1
     else:
-        assert array.ndim > 2
+        assert array.ndim > 1
         assert statistics.ndim == 2, f'{statistics.shape}'
         if channel_first:
             # (C, 4)
