@@ -64,7 +64,7 @@ class DicomUtils:
         tag_res = {}
         for tag in required_tag:
             val = dcfile.get(tag, default=None)
-            if val is not None:
+            if val is not None and isinstance(val, pydicom.DataElement):
                 val = val.value
             tag_res[tag] = val
         if len(tag_res) == 1:
@@ -176,7 +176,7 @@ class DicomUtils:
         tag_res = {}
         for tag in required_tag:
             val = slices[0].get(tag, default=None)
-            if val is not None:
+            if val is not None and isinstance(val, pydicom.DataElement):
                 val = val.value
             tag_res[tag] = val
         if len(tag_res) == 1:
