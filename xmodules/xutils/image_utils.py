@@ -280,10 +280,30 @@ class ImageUtils:
             batched: bool = False,
     ) -> TypeArrayLike[T]:
         if batched:
-            pw = cls._normalize_pad_width(pad_width, image.ndim - 1)
-            pw = np.concatenate([np.zeros((1, 2), dtype=pw.dtype), pw])
+            if image.ndim == 3:
+                # (N, H, W)
+                pw = cls._normalize_pad_width(pad_width, image.ndim - 1)
+                pw = np.concatenate([np.zeros((1, 2), dtype=pw.dtype), pw])
+            elif image.ndim == 4:
+                # (N, H, W, C)
+                pw = cls._normalize_pad_width(pad_width, image.ndim - 2)
+                pw = np.concatenate([
+                    np.zeros((1, 2), dtype=pw.dtype),
+                    pw,
+                    np.zeros((1, 2), dtype=pw.dtype)]
+                )
+            else:
+                raise ValueError(f"Unsupported image ndim {image.ndim}, expect 3 or 4.")
         else:
-            pw = cls._normalize_pad_width(pad_width, image.ndim)
+            if image.ndim == 2:
+                # (H, W)
+                pw = cls._normalize_pad_width(pad_width, image.ndim)
+            elif image.ndim == 3:
+                # (H, W, C)
+                pw = cls._normalize_pad_width(pad_width, image.ndim - 1)
+                pw = np.concatenate([pw, np.zeros((1, 2), dtype=pw.dtype)])
+            else:
+                raise ValueError(f"Unsupported image ndim {image.ndim}, expect 2 or 3.")
         np_lib = np
         if HAS_CUPY:
             if isinstance(image, cp.ndarray):
